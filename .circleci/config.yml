@@ -39,9 +39,9 @@ jobs:
           name: npm run build
           command: npm run build
 
-      - run:
-          name: npm test
-          command: npm test
+      # - run:
+      #     name: npm test
+      #     command: npm test
 
   deploy:
     docker:
@@ -55,28 +55,32 @@ jobs:
       - run:
           name: Building docker image
           environment:
-            PIVOT_LMS_API_URL: https://pivotlms-api.herokuapp.com
-            PIVOT_LMS_DEV_API_URL: https://pivotlms-api-dev.herokuapp.com
+            HOST: https://pivotlms-api.herokuapp.com
+            HOST_DEV: https://pivotlms-api-dev.herokuapp.com
           command: |
             export SHORT_SHA=$(git rev-parse --short HEAD)
 
             case $CIRCLE_BRANCH in
               master )
                 docker build -t pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA \
-                --build-arg ENV=prod \
+                --build-arg NODE_ENV=prod \
                 --build-arg GIT_SHA=$SHORT_SHA \
-                --build-arg HOST=$PIVOT_LMS_API_URL .
+                --build-arg AWS_S3_BUCKET=pivot \
+                --build-arg HOST=$HOST .
                 ;;
               *)
                 docker build -t pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA \
-                --build-arg ENV=dev \
+                --build-arg NODE_ENV=dev \
                 --build-arg GIT_SHA=$SHORT_SHA \
-                --build-arg HOST=$PIVOT_LMS_DEV_API_URL .
+                --build-arg AWS_S3_BUCKET=pivot \
+                --build-arg HOST=$HOST_DEV .
                 ;;
             esac
 
       - run:
           name: Pushing docker image to heroku container registry
+          environment:
+            HEROKU_USERNAME: andreGarvin
           command: |
             export SHORT_SHA=$(git rev-parse --short HEAD)
             export SERVICE_NAME=pivotlms-api-$CIRCLE_BRANCH

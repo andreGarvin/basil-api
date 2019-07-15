@@ -14,26 +14,26 @@ const server = new http.Server(app);
 // exporting the server to be consumed by socket.io in the sockets file
 export default server;
 
+// DRM for mongodb
+import * as mongoose from "mongoose";
+
 // express middleware for headers
 import * as helmet from "helmet";
 
 // JSON request data parser
 import * as bodyParser from "body-parser";
 
-// DRM for mongodb
-import * as mongoose from "mongoose";
-
 // cross origin middleware
 import * as cors from "cors";
+
+// api routes
+import routes from "./routes";
 
 // http logger
 import httpLogger from "./routes/middleware/http-logger";
 
 // logger util
 import logger from "./common/logger";
-
-// api routes
-import routes from "./routes";
 
 // server port number
 const PORT = parseInt(process.env.PORT, 10) || 8081;
@@ -50,7 +50,6 @@ if (process.env.NODE_ENV !== "test") {
   const requiredEnvVariables: string[] = [
     "HOST",
     "API_KEY",
-    "ORIGINS",
     "MONGO_URI",
     "GIPHY_API_KEY",
     "SENDGRID_API_KEY",

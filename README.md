@@ -23,10 +23,10 @@ This readme encapsulates how to setup and start the backend api for local develo
 
 ## Documentation
 
-- This service JSDOC comments for internal code document along with leveraging typescript for type safety at runtime
+- This service [jsdoc](https://devdocs.io/jsdoc/howto-commonjs-modules) comments for internal code document along with leveraging typescript for type safety at runtime
 
 - For api documentation we are using swagger for documenting all api endpoints
 
 ## Testing
 
-For testing this service will be using ava test runner/framework
+For testing this service will be using [ava](https://github.com/avajs/ava) test runner/framework
