@@ -1,0 +1,25 @@
+<style>
+    #badge {
+        font-family: helvetica;
+        border-radius: 4px;
+        font-size: 40px;
+        color: #fff;
+        padding: 5px;
+        height: 70px;
+        width: 70px;
+    }
+</style>
+<div>
+    <img src="https://static1.squarespace.com/static/5b0221d3e749408db8bf92b2/t/5b03688e2b6a2868278a2c25/1528677111713/?format=1500w"
+        style='margin-left: 90px; height: 120px; width: 350px; background-color: blue;' alt="kentro" />
+    <h2 style='text-align: center'>Join {{ variables.workspace_name }} on kentro</h2>
+    <p>
+        {{ variables.member_user_name }} ({{ body.email }}), {{ variables.admin_user_name }}
+        ({{ variables.admin_email }})
+        has added you to join <strong>{{ variables.workspace_name }}</strong> on kentro
+    </p>
+    <span>Click this link and get started on kentro</span>
+    <a href="{{ variables.link }}">Click here to join {{ variables.workspace_name }}!</a>
+    {{Badge variables.class_name }}
+
+</div>

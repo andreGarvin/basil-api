@@ -1,0 +1,19 @@
+<div>
+    <h3>{{ variables.IAM }} has added a {{variables.school_name}} into the registry at {{ variables.created_at }}</h3>
+    <h4>Service: {{ variables.service}}</h4>
+    <div>
+        <p>School name: {{ variables.school_name }}</p>
+        {{#if variables.domain}}
+        <p>School domain: {{ variables.school_domain }}</p>
+        {{/if}}
+        <p>School code: {{ variables.school_code }}</p>
+        <p>Admins of the school: </p>
+        <ul>
+            {{#each variables.admins}}
+            <li>
+                <a>{{ this }}</a>
+            </li>
+            {{/each}}
+        </ul>
+    </div>
+</div>

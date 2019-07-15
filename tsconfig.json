@@ -1,0 +1,14 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "preserveConstEnums": true,
+    "removeComments": true,
+    "noImplicitAny": false,
+    "module": "commonjs",
+    "sourceMap": false,
+    "rootDir": "./src",
+    "target": "esnext",
+    "outDir": "build"
+  },
+  "include": ["src/**/*.ts"]
+}

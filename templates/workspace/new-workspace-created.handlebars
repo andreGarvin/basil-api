@@ -1,0 +1,51 @@
+<style>
+    #badge {
+        font-family: helvetica;
+        border-radius: 4px;
+        font-size: 40px;
+        color: #fff;
+        padding: 5px;
+        height: 70px;
+        width: 70px;
+    }
+</style>
+<div>
+    <img src="https://static1.squarespace.com/static/5b0221d3e749408db8bf92b2/t/5b03688e2b6a2868278a2c25/1528677111713/?format=1500w"
+        style='margin-left: 90px; height: 120px; width: 350px; background-color: blue;' alt="kentro" />
+    <h3 style='text-align: center'>Create a new {{ variables.workspace_type }} on kentro!!!!</h3>
+
+    <div>
+        <p>
+            You have just created <strong>{{ variables.workspace_name }}</strong> an new {{ variables.workspace_type }}
+            on
+            kentro on {{ variables.created_at }}.
+        </p>
+
+        <p>This {{ variables.workspace_type }} currently has {{ variables.members_count }} members that were added
+            including you</p>
+
+        {{#if variables.is_private}}
+        <p>
+            This {{ variables.workspace_type }} is private. meaning only admins of the {{ variables.workspace_type }}
+            can add new memebrs to the {{ variables.workspace_type }}. Other users on kentro have no vivisiblity of
+            the {{ variables.workspace_type }} and can not send any request to join the {{ variables.workspace_type }}
+        </p>
+        {{else if variables.is_public}}
+        <p>
+            This {{ variables.workspace_type }} is a public, meaning anyone who is a part of your school can request
+            to join your {{ variables.workspace_type }}. Only admins of the {{ variables.workspace_type }} can accept
+            these request to join the {{ variables.workspace_type }}
+        </p>
+        {{else}}
+        <p>
+            This {{ variables.workspace_type }} is globally public, this means any user on kentro from any school
+            can see and send request to join your {{ variables.workspace_type }}. Admins of this
+            {{ variables.workspace_type }} can accept these request from user to join.
+        </p>
+        {{/if}}
+
+    </div>
+    <span>Click this link and get started on kentro</span>
+    <a href="{{ variables.link }}">Click here to go to {{ variables.workspace_name }}!</a>
+    {{Badge variables.workspace_name }}
+</div>

@@ -1,0 +1,11 @@
+node_modules
+
+build
+
+.env
+
+.notes
+
+.DS_Store
+
+.nyc_output

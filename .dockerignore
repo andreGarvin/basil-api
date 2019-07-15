@@ -1,0 +1,13 @@
+node_modules
+
+# project files
+prettier.json
+.env.sample
+.gitignore
+README.md
+.circleci
+build
+
+# local files
+.notes
+.env
