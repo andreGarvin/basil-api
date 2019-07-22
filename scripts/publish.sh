@@ -83,15 +83,15 @@ printf "\n"
 
 docker tag $SERVICE:$GIT_SHA registry.heroku.com/$SERVICE/web
 
-if [ "$CREATE" = "true" ]
-then
-  # curl -n -X POST https://api.heroku.com/teams/apps \
-  #   -H "Content-Type: application/json" \
-  #   -H "Authorization: Bearer $API_KEY" \
-  #   -H "Accept: application/vnd.heroku+json; version=3" \
-  #   -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
+# if [ "$CREATE" = "true" ]
+# then
+#   # curl -n -X POST https://api.heroku.com/teams/apps \
+#   #   -H "Content-Type: application/json" \
+#   #   -H "Authorization: Bearer $API_KEY" \
+#   #   -H "Accept: application/vnd.heroku+json; version=3" \
+#   #   -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
   
-  printf "\nCreated $SERVICE\n\n"
-fi
+#   printf "\nCreated $SERVICE\n\n"
+# fi
 
 docker push registry.heroku.com/$SERVICE/web
