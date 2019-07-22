@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # constant
 GIT_SHA=$(git rev-parse --short HEAD)

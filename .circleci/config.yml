@@ -52,7 +52,7 @@ jobs:
 
       - run:
           name: Building docker image
-          command: ./scripts/build.sh --branch $CIRCLE_BRANCH --app $APP_NAME
+          command: scripts/build.sh --branch $CIRCLE_BRANCH --app $APP_NAME
 
       - run:
           name: Pushing docker image to heroku container registry
@@ -63,7 +63,7 @@ jobs:
           command: |
             echo $HEROKU_API_KEY > apikey
 
-            cat apikey | ./publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH
+            cat apikey | publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH
 
             rm -rf apikey
 
@@ -72,6 +72,6 @@ jobs:
           command: |
             echo $HEROKU_API_KEY > apikey
 
-            cat apikey | ./deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
+            cat apikey | deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
 
             rm -rf apikey

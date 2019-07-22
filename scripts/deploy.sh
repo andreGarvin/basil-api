@@ -1,3 +1,5 @@
+#!/bin/sh
+
 APP_NAME=pivotlms-api
 BRANCH=dev
 
