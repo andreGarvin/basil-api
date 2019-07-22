@@ -52,7 +52,10 @@ jobs:
 
       - run:
           name: Building docker image
-          command: scripts/build.sh --branch $CIRCLE_BRANCH --app $APP_NAME
+          command: |
+            chmod u+x scripts/build.sh
+
+            scripts/build.sh --branch $CIRCLE_BRANCH --app $APP_NAME
 
       - run:
           name: Pushing docker image to heroku container registry
@@ -61,17 +64,21 @@ jobs:
             USER_LOGIN: andreGarvin
 
           command: |
+            chmod u+x scripts/publish.sh
+
             echo $HEROKU_API_KEY > apikey
 
-            cat apikey | publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH
+            cat apikey | scripts/publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH
 
             rm -rf apikey
 
       - run:
           name: Releasing docker image to heroku
           command: |
+            chmod u+x scripts/publish.sh
+
             echo $HEROKU_API_KEY > apikey
 
-            cat apikey | deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
+            cat apikey | scripts/deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
 
             rm -rf apikey
