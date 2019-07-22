@@ -58,8 +58,8 @@ case $BRANCH in
     APP_NAME=pivotlms-api
     ;;
   dev | * )
+    BRANCH=dev
     NODE_ENV=dev
-    BRANCH=$BRANCH
     HOST=$DEV_HOST
     APP_NAME=$APP_NAME
     ;;
