@@ -73,7 +73,7 @@ jobs:
       - run:
           name: Releasing docker image to heroku
           command: |
-            chmod u+x scripts/publish.sh
+            chmod u+x scripts/deploy.sh
 
             echo $HEROKU_API_KEY > apikey
 
