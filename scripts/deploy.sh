@@ -3,6 +3,8 @@
 APP_NAME=pivotlms-api
 BRANCH=dev
 
+CREATE=false
+
 while test $# -gt 0; do
   case "$1" in
     -b  | --branch )
@@ -15,21 +17,31 @@ while test $# -gt 0; do
         BRANCH=$1
       fi
     ;;
-  -a  | --app )
+    --create )
       shift
-      
+
       if [ -z "$1" ]
       then
-        APP_NAME=$APP_NAME
+        CREATE=false
       else
-        APP_NAME=$1
+        CREATE=true
       fi
     ;;
-  --password-stdin )
-      # reading stdin from pipe for --password-stdin
-      read API_KEY;
-    ;;
-  esac
+    -a  | --app )
+        shift
+        
+        if [ -z "$1" ]
+        then
+          APP_NAME=$APP_NAME
+        else
+          APP_NAME=$1
+        fi
+      ;;
+    --password-stdin )
+        # reading stdin from pipe for --password-stdin
+        read API_KEY;
+      ;;
+    esac
   shift
 done
 
@@ -38,8 +50,8 @@ case $BRANCH in
     NODE_ENV=production
     ;;
   dev | * )
-    BRANCH=dev
     NODE_ENV=dev
+    BRANCH=$BRANCH
     APP_NAME=$APP_NAME
     ;;
 esac
@@ -51,10 +63,29 @@ IMAGE_NAME=registry.heroku.com/$SERVICE/web
 
 IMAGE_ID=$(docker inspect $IMAGE_NAME --format={{.Id}})
 
-curl -n -X PATCH https://api.heroku.com/apps/$SERVICE/formation \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
-  -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }'
+if [ $CREATE == "true" ]
+then
+  curl -n -X POST https://api.heroku.com/apps \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Accept: application/vnd.heroku+json; version=3" \
+    -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us" }'
+  
+  echo "Created $SERVICE"
 
-echo "deployed $IMAGE_ID"
+  curl -n -X PATCH https://api.heroku.com/apps/$SERVICE/formation \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
+    -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }'
+
+  echo "deployed $IMAGE_ID"
+else
+  curl -n -X PATCH https://api.heroku.com/apps/$SERVICE/formation \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
+    -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }'
+    
+  echo "deployed $IMAGE_ID"
+fi
