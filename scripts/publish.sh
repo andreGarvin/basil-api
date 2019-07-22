@@ -83,7 +83,7 @@ printf "\n"
 
 docker tag $SERVICE:$GIT_SHA registry.heroku.com/$SERVICE/web
 
-if [ "$CREATE" == "true" ]
+if [ "$CREATE" = "true" ]
 then
   # curl -n -X POST https://api.heroku.com/teams/apps \
   #   -H "Content-Type: application/json" \
