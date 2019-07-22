@@ -17,16 +17,6 @@ while test $# -gt 0; do
         BRANCH=$1
       fi
     ;;
-    --create )
-      shift
-
-      if [ -z "$1" ]
-      then
-        CREATE=false
-      else
-        CREATE=true
-      fi
-    ;;
     -a  | --app )
         shift
         
@@ -63,29 +53,10 @@ IMAGE_NAME=registry.heroku.com/$SERVICE/web
 
 IMAGE_ID=$(docker inspect $IMAGE_NAME --format={{.Id}})
 
-if [ $CREATE == "true" ]
-then
-  curl -n -X POST https://api.heroku.com/apps \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_KEY" \
-    -H "Accept: application/vnd.heroku+json; version=3" \
-    -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us" }'
+curl -n -X PATCH https://api.heroku.com/apps/$SERVICE/formation \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
+  -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }'
   
-  echo "Created $SERVICE"
-
-  curl -n -X PATCH https://api.heroku.com/apps/$SERVICE/formation \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_KEY" \
-    -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
-    -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }'
-
-  echo "deployed $IMAGE_ID"
-else
-  curl -n -X PATCH https://api.heroku.com/apps/$SERVICE/formation \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_KEY" \
-    -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
-    -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }'
-    
-  echo "deployed $IMAGE_ID"
-fi
+echo "deployed $IMAGE_ID"
