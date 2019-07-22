@@ -70,8 +70,6 @@ jobs:
 
             cat apikey | scripts/publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH
 
-            rm -rf apikey
-
       - run:
           name: Releasing docker image to heroku
           command: |
@@ -80,5 +78,3 @@ jobs:
             echo $HEROKU_API_KEY > apikey
 
             cat apikey | scripts/deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
-
-            rm -rf apikey

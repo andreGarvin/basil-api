@@ -59,6 +59,7 @@ case $BRANCH in
     ;;
   dev | * )
     NODE_ENV=dev
+    BRANCH=$BRANCH
     HOST=$DEV_HOST
     APP_NAME=$APP_NAME
     ;;
