@@ -65,6 +65,7 @@ jobs:
               master )
                 docker build -t pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA \
                 --build-arg NODE_ENV=prod \
+                --build-arg IS_DOCKER=true \
                 --build-arg GIT_SHA=$SHORT_SHA \
                 --build-arg AWS_S3_BUCKET=pivot \
                 --build-arg HOST=$HOST .
@@ -72,6 +73,7 @@ jobs:
               *)
                 docker build -t pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA \
                 --build-arg NODE_ENV=dev \
+                --build-arg IS_DOCKER=true \
                 --build-arg GIT_SHA=$SHORT_SHA \
                 --build-arg AWS_S3_BUCKET=pivot \
                 --build-arg HOST=$HOST_DEV .

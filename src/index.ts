@@ -51,6 +51,7 @@ if (process.env.NODE_ENV !== "test") {
     "HOST",
     "API_KEY",
     "MONGO_URI",
+    "WEB_APP_HOST",
     "GIPHY_API_KEY",
     "SENDGRID_API_KEY",
     "AWS_ACCESS_KEY_ID",
@@ -66,7 +67,7 @@ if (process.env.NODE_ENV !== "test") {
   });
 
   if (missingEnvVariables.length !== 0) {
-    logger.warnF(
+    logger.warn(
       "YOU ARE MISSING THESE ENVIRONMENTAL VARIABLES [ %s ]",
       missingEnvVariables.join(", ")
     );
@@ -80,12 +81,7 @@ mongoose.connect(MONGO_URI, { useNewUrlParser: true });
 
 mongoose.connection.on("connected", err => {
   if (err) {
-    logger
-      .addFields({
-        stack: err.stack,
-        error_message: err.message
-      })
-      .error("FAILED TO CONNECT TO MONGO DATABASE");
+    logger.child({ error: err }).error("FAILED TO CONNECT TO MONGO DATABASE");
 
     return process.exit(1);
   }
@@ -97,7 +93,7 @@ mongoose.connection.on("connected", err => {
     port being occupied */
   if (require.main === module) {
     server.listen(PORT, () => {
-      logger.info(`RUNNING SERVER ON [PORT:${PORT}]`);
+      logger.info(`RUNNING SERVER ON [PORT:%s]`, PORT);
 
       if (process.env.NODE_ENV === "dev") {
         console.log(`Press ctl^c to quit\n`);
@@ -109,6 +105,7 @@ mongoose.connection.on("connected", err => {
 mongoose.connection.on("disconnected", () => {
   if (process.env.NODE_ENV !== "test") {
     logger.error("DISCONNECTED FROM MONGODB");
+
     process.exit(1);
   }
 });

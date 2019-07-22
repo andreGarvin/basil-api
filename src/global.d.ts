@@ -6,4 +6,10 @@ declare global {
       state?: types.State;
     }
   }
+
+  namespace express {
+    export interface Request {
+      state?: types.State;
+    }
+  }
 }

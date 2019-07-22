@@ -1,14 +1,13 @@
 import * as express from "express";
 
+// utils
 import logger from "../../common/logger";
 
-import { INTERNAL_SERVER_ERROR } from "../../common/error_codes";
+// error codes
+import { INTERNAL_SERVER_ERROR } from "../../common/error-codes";
 
-interface ServiceError {
-  http_code: number;
-  message: string;
-  code: string;
-}
+// types
+import { ServiceError } from "../../common/utils/error";
 
 export default (): express.ErrorRequestHandler => {
   const ERROR_STATUS_CODE: number = 500;
@@ -21,11 +20,13 @@ export default (): express.ErrorRequestHandler => {
   ) => {
     // if the error is a instance of the 'Error' object
     if (err instanceof Error) {
-      logger.addFields(err).error("Error caught on middleware");
+      logger
+        .child({ error: err })
+        .error("Error caught on error handler middleware");
 
       return res.status(ERROR_STATUS_CODE).json({
-        code: INTERNAL_SERVER_ERROR,
-        message: "Something seems to be wrong incident has ackownledged"
+        error_code: INTERNAL_SERVER_ERROR,
+        message: "Something seems to be wrong incident has been ackownledged"
       });
     }
 

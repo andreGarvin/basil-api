@@ -4,6 +4,7 @@ import * as express from "express";
 
 // utils
 import logger from "../../common/logger";
+import { URL } from "url";
 
 /**
  * This function returns a new object of the filtered
@@ -44,9 +45,7 @@ export default (): express.RequestHandler => {
     const startTime = Date.now();
 
     // making a clone of the logger util library
-    const log = logger.clone({
-      defaultFields: {}
-    });
+    const log = logger.child({});
 
     function onFinished(error) {
       // removing the event listeners that were set
@@ -55,32 +54,35 @@ export default (): express.RequestHandler => {
 
       const responseTime = Date.now() - startTime;
 
-      const l = log
+      const fields = [
         // logging the filtered http response headers
-        .addFields(headerFilter(headerFilters, res.getHeaders()))
+        headerFilter(headerFilters, res.getHeaders()),
         // logging the filtered request headers received
-        .addFields(headerFilter(headerFilters, req.headers))
-        .addFields({
+        headerFilter(headerFilters, req.headers),
+        {
           responseTime: `${responseTime} ms`,
           status: this.statusCode,
           protocol: req.protocol,
           method: req.method,
           path: req.url
-        });
+        }
+      ];
 
       if (error || this.statusCode >= 500) {
         // if a error was not given then create a default error
         const err = error || new Error("request failed");
 
-        l.addFields(err).error(
-          "express bubbled up an error up its event listener"
+        log.error(
+          "express bubbled up an error up its event listener",
+          ...fields,
+          err
         );
         return;
       }
 
       // will not log if test are running
       if (process.env.NODE_ENV !== "test") {
-        l.info("request handled");
+        log.info("request handled", ...fields);
       }
     }
 
@@ -90,16 +92,21 @@ export default (): express.RequestHandler => {
 
     // this will not show logs when running test
     if (process.env.NODE_ENV !== "test") {
-      // this logs the incomming http request
-      log
+      const cleanUrl = new URL(req.url);
+      cleanUrl.searchParams.delete("token");
+
+      const fields = [
         // logging the filtered request headers received
-        .addFields(headerFilter(headerFilters, req.headers))
-        .addFields({
+        headerFilter(headerFilters, req.headers),
+        {
           protocol: req.protocol,
-          method: req.method,
-          path: req.url
-        })
-        .info("request received");
+          path: cleanUrl.href,
+          method: req.method
+        }
+      ];
+
+      // this logs the incomming http request
+      log.info("request received", ...fields);
     }
 
     return next();

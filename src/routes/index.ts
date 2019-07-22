@@ -2,6 +2,8 @@ import * as express from "express";
 const router = express.Router();
 
 // routes
+import invitation from "./invitation/route";
+import registry from "./registry/route";
 import health from "./health";
 
 // middlware
@@ -18,6 +20,10 @@ router.get("/version", (req, res) => {
 router.get("/health", health);
 
 router.use(stateMiddlware());
+
+// routes
+router.use("/api/registry", registry);
+router.use("/api/invitation", invitation);
 
 // middlware for handling errors and return error responses
 router.use(errorHandler());

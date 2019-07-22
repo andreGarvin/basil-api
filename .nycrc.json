@@ -1,0 +1,6 @@
+{
+  "per-file": true,
+  "check-coverage": false,
+  "include": ["src/routes/**/*.ts"],
+  "extends": "@istanbuljs/nyc-config-typescript"
+}
