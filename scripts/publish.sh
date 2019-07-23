@@ -32,12 +32,7 @@ while test $# -gt 0; do
       fi
     ;;
   --create )
-      shift
-
-      echo "HELLO"
       CREATE=true
-
-      echo $CREATE
     ;;
   -u  | --user-login )
       shift
