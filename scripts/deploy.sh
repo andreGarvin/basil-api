@@ -35,18 +35,6 @@ while test $# -gt 0; do
   shift
 done
 
-case $BRANCH in
-  master )
-    NODE_ENV=production
-    ;;
-  dev | * )
-    NODE_ENV=dev
-    # BRANCH=$
-    BRANCH=dev
-    APP_NAME=$APP_NAME
-    ;;
-esac
-
 
 SERVICE="$APP_NAME-$BRANCH"
 

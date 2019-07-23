@@ -63,13 +63,24 @@ case $BRANCH in
     ;;
   dev | * )
     APP_NAME=$APP_NAME
-    BRANCH=dev
     ;;
 esac
 
 SERVICE="$APP_NAME-$BRANCH"
 
+if [ "$CREATE" = "true" ]
+then
+  curl -n -X POST https://api.heroku.com/teams/apps \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H "Accept: application/vnd.heroku+json; version=3" \
+    -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
+  
+  printf "\nCreated $SERVICE\n\n"
+fi
+
 printf "\nPushing $SERVICE:$GIT_SHA image to registry\n\n"
+
 
 echo $API_KEY > apikey
 
@@ -78,16 +89,5 @@ cat apikey | docker login --password-stdin --username=$USER_LOGIN registry.herok
 printf "\n"
 
 docker tag $SERVICE:$GIT_SHA registry.heroku.com/$SERVICE/web
-
-# if [ "$CREATE" = "true" ]
-# then
-#   curl -n -X POST https://api.heroku.com/teams/apps \
-#     -H "Content-Type: application/json" \
-#     -H "Authorization: Bearer $API_KEY" \
-#     -H "Accept: application/vnd.heroku+json; version=3" \
-#     -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
-  
-#   printf "\nCreated $SERVICE\n\n"
-# fi
 
 docker push registry.heroku.com/$SERVICE/web
