@@ -70,7 +70,7 @@ SERVICE="$APP_NAME-$BRANCH"
 
 printf "\nPushing $SERVICE\n\n"
 
-echo $API_KEY
+echo $API_KEY > apikey
 
 cat apikey | docker login --password-stdin --username=$USER_LOGIN registry.heroku.com
 
@@ -89,4 +89,4 @@ docker tag $SERVICE:$GIT_SHA registry.heroku.com/$SERVICE/web
 #   printf "\nCreated $SERVICE\n\n"
 # fi
 
-docker push registry.heroku.com/$SERVICE/web
+# docker push registry.heroku.com/$SERVICE/web
