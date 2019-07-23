@@ -66,10 +66,14 @@ esac
 
 SERVICE="$APP_NAME-$BRANCH"
 
+echo $API_KEY > apikey
+
+cat apikey | docker login --password-stdin --username=$USER_LOGIN registry.heroku.com
+
 if [ "$CREATE" = "true" ]
 then
 
-  if [ "${#SERVICE}" == "30" ]
+  if [ "${#SERVICE}" = "30" ]
   then
     echo "The name of the new service is too long"
     exit 1
@@ -80,16 +84,12 @@ then
     -H "Authorization: Bearer $API_KEY" \
     -H "Accept: application/vnd.heroku+json; version=3" \
     -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
-  
+
   printf "\nCreated $SERVICE\n\n"
 fi
 
 printf "\nPushing $SERVICE:$GIT_SHA image to registry\n\n"
 
-
-echo $API_KEY > apikey
-
-cat apikey | docker login --password-stdin --username=$USER_LOGIN registry.heroku.com
 
 printf "\n"
 
