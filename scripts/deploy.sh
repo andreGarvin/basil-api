@@ -41,7 +41,8 @@ case $BRANCH in
     ;;
   dev | * )
     NODE_ENV=dev
-    BRANCH=$BRANCH
+    # BRANCH=$
+    BRANCH=dev
     APP_NAME=$APP_NAME
     ;;
 esac

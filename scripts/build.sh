@@ -54,11 +54,11 @@ case $BRANCH in
     ;;
 esac
 
-# # building docker image
+# building docker image
 docker build \
   -t $APP_NAME-$BRANCH:$GIT_SHA \
   --build-arg HOST=$HOST \
   --build-arg GIT_SHA=$GIT_SHA \
   --build-arg NODE_ENV=$NODE_ENV \
-  --build-arg APP_NAME=$APP_NAME-$BRANCH \
+  --build-arg APP_NAME="$APP_NAME-$BRANCH" \
   .

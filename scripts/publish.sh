@@ -63,12 +63,13 @@ case $BRANCH in
     ;;
   dev | * )
     APP_NAME=$APP_NAME
+    BRANCH=dev
     ;;
 esac
 
 SERVICE="$APP_NAME-$BRANCH"
 
-printf "\nPushing $SERVICE\n\n"
+printf "\nPushing $SERVICE:$GIT_SHA image to registry\n\n"
 
 echo $API_KEY > apikey
 
@@ -89,4 +90,4 @@ docker tag $SERVICE:$GIT_SHA registry.heroku.com/$SERVICE/web
 #   printf "\nCreated $SERVICE\n\n"
 # fi
 
-# docker push registry.heroku.com/$SERVICE/web
+docker push registry.heroku.com/$SERVICE/web
