@@ -73,6 +73,13 @@ SERVICE="$APP_NAME-$BRANCH"
 
 if [ "$CREATE" = "true" ]
 then
+
+  if [ "${#SERVICE}" == "30" ]
+  then
+    echo "The name of the new service is too long"
+    exit 1
+  fi
+
   curl -n -X POST https://api.heroku.com/teams/apps \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $API_KEY" \

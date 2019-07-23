@@ -51,6 +51,15 @@ jobs:
       - setup_remote_docker
 
       - run:
+          name: pre-flight deployment check
+          command: |
+            if [ "${#CIRCLE_BRANCH}" -gt "10" ]
+            then
+              echo "Branch name '$CIRCLE_BRANCH' is too long, change the name of the branch to be less then 10 characters"
+              exit 1
+            fi
+
+      - run:
           name: Building docker image
           command: |
             chmod u+x scripts/build.sh
