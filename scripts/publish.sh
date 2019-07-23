@@ -34,7 +34,10 @@ while test $# -gt 0; do
   --create )
       shift
 
+      echo "HELLO"
       CREATE=true
+
+      echo $CREATE
     ;;
   -u  | --user-login )
       shift
