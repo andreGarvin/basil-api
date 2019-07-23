@@ -59,14 +59,9 @@ done
 # configuring the variables
 case $BRANCH in
   master )
-    HOST=$PROD_HOST
-    NODE_ENV=production
     APP_NAME=pivotlms-api
     ;;
   dev | * )
-    NODE_ENV=dev
-    HOST=$DEV_HOST
-    BRANCH=$BRANCH
     APP_NAME=$APP_NAME
     ;;
 esac
@@ -77,6 +72,9 @@ printf "\nPushing $SERVICE\n\n"
 
 echo $API_KEY > apikey
 
+echo $USER_LOGIN
+echo "registry.heroku.com/$SERVICE/web"
+
 cat apikey | docker login --password-stdin --username=$USER_LOGIN registry.heroku.com
 
 printf "\n"
@@ -85,11 +83,11 @@ docker tag $SERVICE:$GIT_SHA registry.heroku.com/$SERVICE/web
 
 # if [ "$CREATE" = "true" ]
 # then
-#   # curl -n -X POST https://api.heroku.com/teams/apps \
-#   #   -H "Content-Type: application/json" \
-#   #   -H "Authorization: Bearer $API_KEY" \
-#   #   -H "Accept: application/vnd.heroku+json; version=3" \
-#   #   -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
+#   curl -n -X POST https://api.heroku.com/teams/apps \
+#     -H "Content-Type: application/json" \
+#     -H "Authorization: Bearer $API_KEY" \
+#     -H "Accept: application/vnd.heroku+json; version=3" \
+#     -d '{ "name": '\"$SERVICE\"', "stack": "container", "region": "us", "team": "pivotlms", "personal": false }'
   
 #   printf "\nCreated $SERVICE\n\n"
 # fi
