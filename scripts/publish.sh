@@ -70,10 +70,7 @@ SERVICE="$APP_NAME-$BRANCH"
 
 printf "\nPushing $SERVICE\n\n"
 
-echo $API_KEY > apikey
-
-echo $USER_LOGIN
-echo "registry.heroku.com/$SERVICE/web"
+echo $API_KEY
 
 cat apikey | docker login --password-stdin --username=$USER_LOGIN registry.heroku.com
 
