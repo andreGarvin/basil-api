@@ -68,7 +68,7 @@ jobs:
 
             echo $HEROKU_API_KEY > apikey
 
-            if [ $CIRCLE_BUILD_NUM == "1" ]
+            if [ "$CIRCLE_BUILD_NUM" = "1" ]
             then
               cat apikey | scripts/publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH --create
             else
