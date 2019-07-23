@@ -66,7 +66,7 @@ jobs:
           command: |
             chmod u+x scripts/publish.sh
 
-            echo $HEROKU_API_KEY > apikey
+            echo "$HEROKU_API_KEY" > apikey
 
             if [ "$CIRCLE_BUILD_NUM" = "1" ]
             then
@@ -80,6 +80,6 @@ jobs:
           command: |
             chmod u+x scripts/deploy.sh
 
-            echo $HEROKU_API_KEY > apikey
+            echo "$HEROKU_API_KEY" > apikey
 
             cat apikey | scripts/deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
