@@ -57,14 +57,14 @@ done
 # configuring the variables
 case $BRANCH in
   master )
+    SERVICE=$APP_NAME
     APP_NAME=pivotlms-api
     ;;
   dev | * )
     APP_NAME=$APP_NAME
+    SERVICE="$APP_NAME-$BRANCH"
     ;;
 esac
-
-SERVICE="$APP_NAME-$BRANCH"
 
 echo $API_KEY > apikey
 

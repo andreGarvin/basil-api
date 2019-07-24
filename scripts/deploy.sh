@@ -2,6 +2,7 @@
 
 APP_NAME=pivotlms-api
 BRANCH=dev
+SERVICE=
 
 CREATE=false
 
@@ -35,8 +36,19 @@ while test $# -gt 0; do
   shift
 done
 
+# configuring the variables
+case $BRANCH in
+  master )
+    APP_NAME=pivotlms-api
+    SERVICE=$APP_NAME
+    ;;
+  dev | * )
+    APP_NAME=$APP_NAME
+    SERVICE="$APP_NAME-$BRANCH"
+    ;;
+esac
 
-SERVICE="$APP_NAME-$BRANCH"
+
 
 IMAGE_NAME=registry.heroku.com/$SERVICE/web
 
