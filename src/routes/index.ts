@@ -14,7 +14,9 @@ const GIT_SHA: string = process.env.GIT_SHA || "no revision";
 
 // this returns the get sha of the repository
 router.get("/version", (req, res) => {
-  return res.status(200).json({ revision: GIT_SHA });
+  return res
+    .status(200)
+    .json({ revision: GIT_SHA, service: process.env.APP_NAME });
 });
 
 router.get("/health", health);

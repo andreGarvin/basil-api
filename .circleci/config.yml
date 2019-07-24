@@ -8,12 +8,6 @@ workflows:
       - deploy:
           requires:
             - test
-          filters:
-            branches:
-              only:
-                - dev
-                - master
-                - staging
 
 jobs:
   test:
@@ -49,64 +43,47 @@ jobs:
       - image: circleci/node:8.9.1
       - image: docker:17.05.0-ce-git
 
+    environment:
+      APP_NAME: pivotlms-api
+
     steps:
       - checkout
       - setup_remote_docker
 
       - run:
-          name: Building docker image
-          environment:
-            HOST: https://pivotlms-api.herokuapp.com
-            HOST_DEV: https://pivotlms-api-dev.herokuapp.com
+          name: pre-flight deployment check
           command: |
-            export SHORT_SHA=$(git rev-parse --short HEAD)
+            if [ "${#CIRCLE_BRANCH}" -gt "10" ]
+            then
+              echo "Branch name '$CIRCLE_BRANCH' is too long, change the name of the branch to be less then 10 characters"
+              exit 1
+            fi
 
-            case $CIRCLE_BRANCH in
-              master )
-                docker build -t pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA \
-                --build-arg NODE_ENV=prod \
-                --build-arg IS_DOCKER=true \
-                --build-arg GIT_SHA=$SHORT_SHA \
-                --build-arg AWS_S3_BUCKET=pivot \
-                --build-arg HOST=$HOST .
-                ;;
-              *)
-                docker build -t pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA \
-                --build-arg NODE_ENV=dev \
-                --build-arg IS_DOCKER=true \
-                --build-arg GIT_SHA=$SHORT_SHA \
-                --build-arg AWS_S3_BUCKET=pivot \
-                --build-arg HOST=$HOST_DEV .
-                ;;
-            esac
+      - run:
+          name: Building docker image
+          command: |
+            chmod u+x scripts/build.sh
+
+            scripts/build.sh --branch $CIRCLE_BRANCH --app $APP_NAME
 
       - run:
           name: Pushing docker image to heroku container registry
+
           environment:
-            HEROKU_USERNAME: andreGarvin
+            USER_LOGIN: andreGarvin
+
           command: |
-            export SHORT_SHA=$(git rev-parse --short HEAD)
-            export SERVICE_NAME=pivotlms-api-$CIRCLE_BRANCH
+            chmod u+x scripts/publish.sh
 
-            echo $HEROKU_API_KEY > apikey
+            echo "$HEROKU_API_KEY" > apikey
 
-            cat apikey | docker login --username=$HEROKU_USERNAME --password-stdin registry.heroku.com
-
-            docker tag pivotlms-api:$CIRCLE_BRANCH-$SHORT_SHA registry.heroku.com/$SERVICE_NAME/web
-
-            docker push registry.heroku.com/$SERVICE_NAME/web
+            cat apikey | scripts/publish.sh --password-stdin --user-login $USER_LOGIN --app $APP_NAME --branch $CIRCLE_BRANCH --create
 
       - run:
           name: Releasing docker image to heroku
           command: |
-            export SERVICE_NAME=pivotlms-api-$CIRCLE_BRANCH
-            export IMAGE_NAME=registry.heroku.com/$SERVICE_NAME/web
-            export IMAGE_ID=$(docker inspect $IMAGE_NAME --format={{.Id}})
+            chmod u+x scripts/deploy.sh
 
-            echo "Releasing = $IMAGE_NAME [$IMAGE_ID]"
+            echo "$HEROKU_API_KEY" > apikey
 
-            curl -n -X PATCH https://api.heroku.com/apps/$SERVICE_NAME/formation \
-              -d '{ "updates": [ { "type": "web", "docker_image": '\"$IMAGE_ID\"' } ] }' \
-              -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
-              -H "Authorization: Bearer $HEROKU_API_KEY" \
-              -H "Content-Type: application/json"
+            cat apikey | scripts/deploy.sh --password-stdin --app $APP_NAME --branch $CIRCLE_BRANCH
