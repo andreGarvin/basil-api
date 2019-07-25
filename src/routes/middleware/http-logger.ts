@@ -93,7 +93,7 @@ export default (): express.RequestHandler => {
 
       // this will not show logs when running test
       if (process.env.NODE_ENV !== "test") {
-        // const url = [process.env.HOST, req.url].join("");
+        const url = [process.env.HOST, req.url].join("");
 
         const cleanUrl = new URL(req.url);
         cleanUrl.searchParams.delete("token");
