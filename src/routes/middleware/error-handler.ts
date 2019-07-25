@@ -26,7 +26,8 @@ export default (): express.ErrorRequestHandler => {
 
       return res.status(ERROR_STATUS_CODE).json({
         error_code: INTERNAL_SERVER_ERROR,
-        message: "Something seems to be wrong incident has been ackownledged"
+        message:
+          "Something seems to be wrong, this incident has been ackownledged"
       });
     }
 

@@ -7,8 +7,12 @@ import registry from "./registry/route";
 import health from "./health";
 
 // middlware
+import httpLogger from "./middleware/http-logger";
 import errorHandler from "./middleware/error-handler";
 import stateMiddlware from "./middleware/state";
+
+// express http request logger
+router.use(httpLogger());
 
 const GIT_SHA: string = process.env.GIT_SHA || "no revision";
 

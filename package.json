@@ -19,7 +19,6 @@
   "author": "Andre Garvin",
   "license": "MIT",
   "dependencies": {
-    "@openfin/snog": "2.0.8",
     "@sendgrid/mail": "6.2.1",
     "@types/joi": "14.3.3",
     "@types/mongoose": "5.5.8",

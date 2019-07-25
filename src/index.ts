@@ -29,9 +29,6 @@ import * as cors from "cors";
 // api routes
 import routes from "./routes";
 
-// http logger
-import httpLogger from "./routes/middleware/http-logger";
-
 // logger util
 import logger from "./common/logger";
 
@@ -111,9 +108,6 @@ mongoose.connection.on("disconnected", () => {
 });
 
 // middleware
-
-// express http request logger
-app.use(httpLogger());
 
 // http header protection
 app.use(helmet());
