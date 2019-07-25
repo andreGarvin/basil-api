@@ -95,7 +95,7 @@ export default (): express.RequestHandler => {
       if (process.env.NODE_ENV !== "test") {
         const url = [process.env.HOST, req.url].join("");
 
-        const cleanUrl = new URL(req.url);
+        const cleanUrl = new URL(url);
         cleanUrl.searchParams.delete("token");
 
         const fields = [
