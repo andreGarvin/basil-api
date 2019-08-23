@@ -73,11 +73,7 @@ export default (): express.RequestHandler => {
           // if a error was not given then create a default error
           const err = error || new Error("request failed");
 
-          log.error(
-            "express bubbled up an error up its event listener",
-            ...fields,
-            err
-          );
+          log.error("Server return status of 500", ...fields, err);
           return;
         }
 

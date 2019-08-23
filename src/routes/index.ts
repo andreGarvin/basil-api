@@ -2,13 +2,14 @@ import * as express from "express";
 const router = express.Router();
 
 // routes
+import authentication from "./authentication/route";
 import invitation from "./invitation/route";
 import registry from "./registry/route";
 import health from "./health";
 
 // middlware
-import httpLogger from "./middleware/http-logger";
 import errorHandler from "./middleware/error-handler";
+import httpLogger from "./middleware/http-logger";
 import stateMiddlware from "./middleware/state";
 
 // express http request logger
@@ -28,6 +29,7 @@ router.get("/health", health);
 router.use(stateMiddlware());
 
 // routes
+router.use("/auth", authentication);
 router.use("/api/registry", registry);
 router.use("/api/invitation", invitation);
 

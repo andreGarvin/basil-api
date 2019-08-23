@@ -2,34 +2,29 @@ import * as express from "express";
 
 import * as joi from "joi";
 
-// controllers
-import token from "../index";
+// modules
+import * as token from "../index";
 
 // utils
 import logger from "../../../../common/logger";
 
 // error codes
 import AuthenticationError from "../../error-codes";
+import { ValidationJsonResponse } from "../../../../config";
 
-export default (
+const tokenAuthenticationMiddlewre = (
   req: express.Request,
   res: express.Response,
   next: express.NextFunction
 ) => {
   // check if a user token was provided
   const USER_TOKEN: string = req.get("x-token");
-  if (!USER_TOKEN) {
-    return next();
-  }
 
   const { error } = joi.validate(USER_TOKEN, joi.string().required());
   if (error) {
     logger.warn(error.message);
 
-    return res.status(400).json({
-      message: "The Provided token is invalid",
-      error_code: AuthenticationError.INVALID_AUTHORIZATION_TYPE_EXCEPTION
-    });
+    return res.status(400).json(ValidationJsonResponse);
   }
 
   const [AUTHTYPE, TOKEN]: string[] = USER_TOKEN.split(" ");
@@ -42,10 +37,7 @@ export default (
   }
 
   if (!TOKEN) {
-    return res.status(400).json({
-      error_code: AuthenticationError.INVALID_AUTHORIZATION_TYPE_EXCEPTION,
-      message: "Token was not provided, token authentication request invalid"
-    });
+    return res.status(400).json(ValidationJsonResponse);
   }
 
   // if the request is authenticate a token, forward on the request
@@ -71,3 +63,5 @@ export default (
       return next(err);
     });
 };
+
+export default tokenAuthenticationMiddlewre;

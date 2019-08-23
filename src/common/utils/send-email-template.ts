@@ -5,17 +5,18 @@ import { readFile } from "fs";
 // promisifying the async readFile method
 const readFileAsync = promisify(readFile);
 
+import { MailData } from "@sendgrid/helpers/classes/mail";
 import * as sendgrid from "@sendgrid/mail";
-import handlebars from "handlebars";
+import * as handlebars from "handlebars";
 
 // utils
 import logger from "../logger";
-import { MailData } from "@sendgrid/helpers/classes/mail";
+
+// config
+import { NO_REPLY } from "../../config";
 
 // providing the send grid api with the API KEY
 sendgrid.setApiKey(process.env.SENDGRID_API_KEY);
-
-export const NO_REPLY = process.env.NO_REPLY || "Pivot <no-reply@pivotlms.com>";
 
 handlebars.registerHelper("Badge", (name: string) => {
   // grabbing the name name of the school or class
@@ -37,7 +38,7 @@ handlebars.registerHelper("Badge", (name: string) => {
 });
 
 // directory path where all the templates located
-const TEMPLATES_PATH = resolve(__dirname, "..", "..", "templates");
+const TEMPLATES_PATH = resolve(__dirname, "..", "..", "..", "templates");
 
 export enum TEMPLATES {
   // workspace email templates
@@ -51,6 +52,7 @@ export enum TEMPLATES {
 
   // invitaton email templates
   INVITATON = "invitation/invitation",
+  ADMIN_INVITATION = "invitation/admin-invitation",
 
   // registry  email templates
   NEW_SCHOOL_REGISTRED = "registry/new-school-registred"
@@ -106,8 +108,8 @@ export async function sendEmailTemplate(
   }
 }
 
-// this sends a bluk of email templates
-export async function sendBlukEmailTemplate(
+// this sends a bulk of email templates
+export async function sendbulkEmailTemplate(
   templateName: string,
   emails: {
     body: EmailBody;

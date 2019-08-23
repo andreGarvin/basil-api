@@ -1,12 +1,12 @@
 // models
-import userModel from "../../authentication/model";
+import userModel from "../../user/model";
 
 // error codes
 import InvitationError from "../error-codes";
 
-export default (req, res, next) => {
+const invitationPremissionMiddleware = (req, res, next) => {
   return userModel
-    .findOne({ uid: req.state.user })
+    .findOne({ id: req.state.user })
     .then(user => {
       if (user.role === "student") {
         return res.status(401).json({
@@ -19,3 +19,5 @@ export default (req, res, next) => {
     })
     .catch(next);
 };
+
+export default invitationPremissionMiddleware;

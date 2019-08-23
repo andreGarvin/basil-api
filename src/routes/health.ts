@@ -1,10 +1,9 @@
 import * as express from "express";
 
 // models
-import registryAdminMemberModel from "./registry/models/member.model";
-import registryModel from "./registry/models/registry.model";
 import invitationModel from "./invitation/model";
-import userModel from "./authentication/model";
+import registryModel from "./registry/model";
+import userModel from "./user/model";
 
 // utils
 import logger from "../common/logger";
@@ -19,7 +18,6 @@ const heavyCheck = async (): Promise<void> => {
     await userModel.find({}).limit(1);
     await registryModel.find({}).limit(1);
     await invitationModel.find({}).limit(1);
-    await registryAdminMemberModel.find({}).limit(1);
   } catch (err) {
     logger.child({ error: err }).error("Internal error, A query failed");
 

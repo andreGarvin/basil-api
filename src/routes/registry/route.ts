@@ -3,75 +3,69 @@ const router = express.Router();
 
 import * as joi from "joi";
 
-// module
+// modules
+import * as invitation from "../invitation/index";
 import * as registry from "./index";
+
+// utils
+import validationResponse from "../../common/utils/joi-validate-response";
+import returnInt from "../../common/utils/return-int";
 
 // middleware
 import apiAuthenticationMiddleware from "../middleware/api-authentication";
 
-// utils
-import returnInt from "../../common/utils/return-int";
+// request schema for resgitry endpoints
+import {
+  registrySearchParams,
+  newSchoolInfoSchema,
+  addAdminbulkSchema
+} from "./request-schemas";
 
 // error codes
-import { VALIDATION_EXCEPTION } from "../../common/error-codes";
+import { ValidationJsonResponse } from "../../config";
 
 router.post("/register", apiAuthenticationMiddleware, (req, res, next) => {
-  const schema = joi.object().keys({
-    domain: joi
-      .string()
-      // regex for checking if the dmoain is a "valid" email domain
-      .regex(/@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/gi)
-      .optional()
-      .error(([err]) => "the domain must be a valid email domain"),
-
-    name: joi
-      .string()
-      .required()
-      .error(
-        ([err]) => "You must provide the name of the school you are registering"
-      ),
-
-    admins: joi
-      .array()
-      .items(joi.string().optional())
-      .error(([err]) => {
-        if (err.type === "array.min") {
-          return "You must provide at least 1 admin to add the school to the registry";
-        }
-
-        return err;
-      })
-      .min(1)
-      .max(30)
+  const { error } = joi.validate(req.body, newSchoolInfoSchema, {
+    abortEarly: false
   });
-
-  const { error } = joi.validate(req.body, schema, { abortEarly: false });
   if (error) {
-    return res.status(400).json({
-      error_code: VALIDATION_EXCEPTION,
-      message:
-        "There seems to be issue with the provided configure for registering",
-      errors: error.details.map(err => {
-        delete err.context.label;
-        delete err.path;
-        delete err.type;
-        return err;
-      })
-    });
+    ValidationJsonResponse.context.errors = validationResponse(error.details);
+
+    return res.status(400).json(ValidationJsonResponse);
   }
 
-  const { name, domain = "", admins } = req.body;
+  const { name, domain = "" } = req.body;
   return registry
-    .insert(name, domain, admins)
+    .insert(name, domain)
     .then(school_id => res.status(200).json({ school_id }))
     .catch(next);
 });
+
+router.post(
+  "/invite/admin/bulk",
+  apiAuthenticationMiddleware,
+  (req, res, next) => {
+    const { error } = joi.validate(req.body, addAdminbulkSchema, {
+      abortEarly: false
+    });
+    if (error) {
+      ValidationJsonResponse.context.errors = validationResponse(error.details);
+
+      return res.status(400).json(ValidationJsonResponse);
+    }
+
+    return invitation
+      .sendbulkAdminInvitations(req.body.emails, req.body.school_id)
+      .then(() => res.status(200).json({ sent: true }))
+      .catch(next);
+  }
+);
 
 router.get("/search", (req, res, next) => {
   const body = {
     page: req.query.page,
     limit: req.query.limit,
-    search: req.query.search
+    search: req.query.search || ""
   };
 
   body.page = returnInt(body.page, 10, 1);
@@ -81,27 +75,11 @@ router.get("/search", (req, res, next) => {
     body.limit = 15;
   }
 
-  const schema = joi.object().keys({
-    page: joi.number().optional(),
-    limit: joi.number().optional(),
-    search: joi
-      .string()
-      .optional()
-      .allow("")
-  });
-
-  const { error } = joi.validate(body, schema);
+  const { error } = joi.validate(body, registrySearchParams);
   if (error) {
-    return res.status(400).json({
-      error_code: VALIDATION_EXCEPTION,
-      message: "There seems to be issue with searching for schools",
-      errors: error.details.map(err => {
-        delete err.context.label;
-        delete err.path;
-        delete err.type;
-        return err;
-      })
-    });
+    ValidationJsonResponse.context.errors = validationResponse(error.details);
+
+    return res.status(400).json(ValidationJsonResponse);
   }
 
   return registry

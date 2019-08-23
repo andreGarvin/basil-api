@@ -1,0 +1,37 @@
+<style>
+  #badge {
+    font-family: helvetica;
+    border-radius: 4px;
+    font-size: 40px;
+    color: #fff;
+    padding: 5px;
+    height: 70px;
+    width: 70px;
+  }
+</style>
+
+<img
+  src="https://static1.squarespace.com/static/5b0221d3e749408db8bf92b2/t/5b03688e2b6a2868278a2c25/1528677111713/?format=1500w"
+  style='margin-left: 90px; height: 120px; width: 350px; background-color: blue;' alt="kentro" />
+
+<p style='text-align: center'>Join Pivot</p>
+
+<div>
+  <div>
+    <h3>Thank you for joining Kentro the platform built for students by students.</h3>
+    <p>You have been sent a admin invitation from kentro for {{variables.school_name}}. This invitation was sent
+      because your school has been registered in our platform resgirty. You can now use the Kentro application
+      and send out invites to other people, create classes, and starting using the the many tools kentro offers.
+    </p>
+  </div>
+</div>
+
+<h3>Lets get started!!!</h3>
+
+<p>Click this link and get started on creating your account on kentro</p>
+
+<button>
+  <a href="{{ variables.link }}">Click here to join!</a>
+</button>
+
+{{Badge variables.school_name }}

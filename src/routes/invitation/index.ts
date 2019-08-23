@@ -2,750 +2,784 @@ import { URL } from "url";
 
 import * as dateFn from "date-fns";
 
-// modules
-import * as registry from "../registry/index";
-
 // utils
+import ErrorResponse from "../../common/utils/error";
+import logger from "../../common/logger";
 import {
+  sendbulkEmailTemplate,
   sendEmailTemplate,
-  sendBlukEmailTemplate,
   TEMPLATES
 } from "../../common/utils/send-email-template";
-import ErrorResponse, { ServiceError } from "../../common/utils/error";
-import logger from "../../common/logger";
 
 // models
-import registryModel from "../registry/models/registry.model";
-// import adminMemberModel from "../registry/models/member.model";
-import userModel from "../authentication/model";
+import registryModel from "../registry/model";
+import userModel from "../user/model";
 import invitationModel from "./model";
+
+// config
+import { APP_NAME, NO_REPLY } from "../../config";
 
 // types
 import {
-  Invitation,
+  bulkInvitationInsertResponse,
   SentInvitationResponse,
-  InvitationBatchResponse,
-  InvitationUpdate,
-  SentBatchInvitationResponse,
-  InvitationInfo
+  InvitationInfo,
+  Invitation
 } from "./types";
-import { PaginationResults } from "../../types";
 
 // error codes
 import AuthenticationError from "../authentication/error-codes";
+import RegistryError from "../registry/error-codes";
 import InvitationError from "./error-codes";
 
-export const SERVICE = process.env.APP_NAME || "pivotlms-api";
+// helper fucntion
+/**
+ * This function wrapper around the function to send template email
+ *
+ * @param invitation This is the invitation  document record
+ * stored in the invitations collection
+ */
+const sendEmail = async (invitation: Invitation): Promise<void> => {
+  // this is the body of the email
+  const emailBody = {
+    from: NO_REPLY,
+    // the email of the recipient
+    to: invitation.email,
+    subject: "You were invited to pivot!"
+  };
 
-class InvitationController {
-  private async sendBlukInvitationEmail(
-    sender: { name: string; email: string },
-    invitations: { email: string; type: string; id: string }[],
-    schoolName: string
-  ): Promise<void> {
-    try {
-      const blukEmails = invitations.map(invitation => {
-        let subject: string;
-        if (invitation.type === "admin") {
-          subject = `${sender.name} sent you a admin invitation`;
+  // constructing the invitation link
+  const invitationLink = new URL(process.env.HOST);
+
+  /* if the server is running in a docker container then it will use https
+    instead of http, this is a assumes this is up on the web service */
+  invitationLink.protocol = process.env.IS_DOCKER ? "https" : "http";
+  invitationLink.pathname = `/api/invitation/open/${invitation.id}`;
+
+  const registeredSchool = await registryModel.findOne(
+    { id: invitation.school_id },
+    { name: 1, _id: 0 }
+  );
+  if (registeredSchool === null) {
+    logger.error(
+      "Internal error, school not found when sending invitation email"
+    );
+
+    throw new Error(
+      "Internal error, school not found when sending invitation email"
+    );
+  }
+
+  // if the server create the invitation
+  if (invitation.from === APP_NAME) {
+    if (invitation.type !== "admin") {
+      logger.error(
+        "Internal error, The service was sending a non admin invitation"
+      );
+    }
+
+    emailBody.subject = "Pivot Admin invitation";
+    await sendEmailTemplate(TEMPLATES.ADMIN_INVITATION, emailBody, {
+      link: invitationLink.href,
+      school_name: registeredSchool.name
+    });
+
+    return;
+  }
+
+  const userAccount = await userModel.findOne({
+    id: invitation.from,
+    school_id: invitation.school_id
+  });
+
+  const userName: string = `${userAccount.first_name} ${userAccount.last_name}`;
+  if (invitation.type === "admin") {
+    emailBody.subject = `${userName} sent you a admin invitation to join pivot!`;
+  } else {
+    emailBody.subject = `${userName} has invited you to join pivot!`;
+  }
+
+  const variables = {
+    is_professor: invitation.type === "professor",
+
+    sender_email: userAccount.email,
+    sender_user_name: `${userAccount.first_name} ${userAccount.last_name}`,
+
+    link: invitationLink.href,
+    school_name: registeredSchool.name
+  };
+
+  await sendEmailTemplate(TEMPLATES.INVITATON, emailBody, variables);
+};
+
+/**
+ * This function cretaes and inserts a new invitation into
+ * the invitations collection
+ *
+ * @param {string} from This could be a user id or the name of the service
+ * @param {string} email The email of recipient recieving the invitation
+ * @param {string} role The role the type of invitation the recipient is being sent
+ * @param {string} schoolId The id of the school the invitation belongs to
+ */
+const createInvitation = async (
+  from: string,
+  email: string,
+  role: string,
+  schoolId: string
+): Promise<Invitation> => {
+  try {
+    const registeredSchool = await registryModel.findOne({
+      id: schoolId
+    });
+    if (registeredSchool === null) {
+      logger
+        .child({ school_id: schoolId })
+        .error(
+          "Internal error, invitation was not created becuase the school was not found"
+        );
+
+      throw new Error(
+        "Internal error, invitation was not created becuase the school was not found"
+      );
+    }
+
+    if (registeredSchool.domain) {
+      if (!email.endsWith(registeredSchool.domain)) {
+        throw ErrorResponse(
+          InvitationError.DOMAIN_EXCEPTION,
+          "The user's email has been blocked for not match the same email domain as the school that your account is regiestered under",
+          { http_code: 400 }
+        );
+      }
+    }
+
+    const account = await userModel.findOne({
+      email: {
+        $options: "i",
+        $regex: email
+      },
+      school_id: schoolId
+    });
+    if (account) {
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_EXIST_EXCEPTION,
+        "This account already exist under this school",
+        { http_code: 400 }
+      );
+    }
+
+    const invitation = await invitationModel.findOne({
+      email: {
+        $options: "i",
+        $regex: email
+      },
+      school_id: schoolId
+    });
+    if (invitation) {
+      throw ErrorResponse(
+        InvitationError.INVITATION_EXIST_EXCEPTION,
+        "This invitation exists",
+        { http_code: 400 }
+      );
+    }
+
+    const createdAt = new Date().toISOString();
+
+    const expirationDate = dateFn
+      .endOfDay(dateFn.addDays(createdAt, 7))
+      .toISOString();
+
+    // creating a new record of the invitation
+    const newInvitation = new invitationModel({
+      // who created the invitation
+      from,
+
+      // the email of the user who is receiving the invite
+      email,
+
+      // the id of the school the invitation is under
+      school_id: schoolId,
+
+      created_at: createdAt,
+
+      // the type of invitation and role the will inherit when creating their account
+      type: role || "student",
+
+      expires_at: expirationDate
+    });
+
+    await newInvitation.save();
+
+    return newInvitation.toJSON();
+  } catch (err) {
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to create invitation");
+    }
+
+    throw err;
+  }
+};
+
+/**
+ * This function preforms a bulk write to the invitations collection and returns a response of that
+ * bulk write
+ *
+ * @param {string} from The user id or the name of service
+ * @param {string[]} emails A array of emails
+ * @param {string} role The role the type of invitation the recipient is being sent
+ * @param {string} schoolId The id of the school the invitation belongs to
+ */
+export const writebulkInvitation = async (
+  from: string,
+  emails: string[],
+  role: string,
+  schoolId: string
+): Promise<bulkInvitationInsertResponse[]> => {
+  try {
+    const registeredSchool = await registryModel.findOne({ id: schoolId });
+    if (registeredSchool === null) {
+      logger
+        .child({
+          school_id: schoolId
+        })
+        .error("Provided school id does not exist school id");
+
+      throw new Error(
+        "Internal error, failed to write bulk invitation because school was not found"
+      );
+    }
+
+    const invitationBatch = emails
+      .map(email => ({ email, inserted: false }))
+      // filering all emails that do not match the schools domain
+      .map((invitation: any) => {
+        if (registeredSchool.domain) {
+          invitation.inserted = invitation.email.endsWith(
+            registeredSchool.domain
+          );
+
+          if (!invitation.inserted) {
+            invitation.error_code = InvitationError.DOMAIN_EXCEPTION;
+          }
         } else {
-          subject = `${
-            sender.name
-          } has invited you to join ${schoolName} on pivot`;
+          invitation.inserted = true;
+        }
+
+        return invitation;
+      });
+
+    // bulk of invitations being created and sent
+    return await Promise.all(
+      invitationBatch
+        // this step is iterating over each invitation to either send or reject the invitation
+        .map(async (invitation: bulkInvitationInsertResponse) => {
+          if (!invitation.inserted) {
+            return invitation;
+          }
+
+          const account = await userModel.findOne({
+            email: {
+              $options: "i",
+              $regex: invitation.email
+            },
+            school_id: registeredSchool.id
+          });
+          if (account) {
+            invitation.inserted = false;
+            invitation.error_code = AuthenticationError.ACCOUNT_EXIST_EXCEPTION;
+
+            return invitation;
+          }
+
+          // checking if the invitations exist
+          const invitationDocument = await invitationModel.findOne({
+            email: {
+              $options: "i",
+              $regex: invitation.email
+            },
+            school_id: registeredSchool.id
+          });
+          if (invitationDocument) {
+            invitation.inserted = false;
+            invitation.error_code = InvitationError.INVITATION_EXIST_EXCEPTION;
+
+            return invitation;
+          }
+
+          try {
+            const createdAt = new Date().toISOString();
+
+            const exiprationDate = dateFn
+              .endOfDay(dateFn.addDays(createdAt, 7))
+              .toISOString();
+
+            const newInvitation = new invitationModel({
+              from,
+              type: role,
+              created_at: createdAt,
+              email: invitation.email,
+              expires_at: exiprationDate,
+              school_id: registeredSchool.id
+            });
+
+            await newInvitation.save();
+
+            invitation.id = newInvitation.id;
+
+            return invitation;
+          } catch (err) {
+            // if the invitation is a duplicate
+            if (err.stack.includes("duplicate key")) {
+              invitation.inserted = false;
+              invitation.error_code =
+                InvitationError.INVITATION_EXIST_EXCEPTION;
+
+              return invitation;
+            }
+
+            logger
+              .child({ error: err })
+              .error(
+                "Failed to create and insert invitation in invitation collection"
+              );
+
+            throw err;
+          }
+        })
+    );
+  } catch (err) {
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to write a bulk invitation ");
+    }
+
+    throw err;
+  }
+};
+
+/**
+ * This method sends a bulk of email invitations and return a response of the invitations
+ * that were sent
+ *
+ * @param {string} userId The user id
+ * @param {string[]} emails The array of emails
+ * @param {string} role The role the type of invitation the recipient is being sent
+ */
+export const sendbulkInvitation = async (
+  userId: string,
+  emails: string[],
+  role: string
+): Promise<bulkInvitationInsertResponse[]> => {
+  try {
+    const userAccount = await userModel.findOne({ id: userId });
+    if (userAccount === null) {
+      logger
+        .child({ user_id: userId })
+        .error("This user account does not exist found");
+
+      throw new Error(
+        "Internal error, failed to create invitation because user account does not exist"
+      );
+    }
+
+    if (userAccount.role === "student") {
+      throw ErrorResponse(
+        InvitationError.INVITATION_PREMISSION_EXCEPTION,
+        "Premission denied to send invitations for other users to join your school",
+        { http_code: 400 }
+      );
+    }
+
+    if (userAccount.role === "admin") {
+      if (role === "admin") {
+        throw ErrorResponse(
+          InvitationError.INVITATION_PREMISSION_EXCEPTION,
+          "You do not have premission can not send a admin invitation",
+          { http_code: 401 }
+        );
+      }
+    }
+
+    const registeredSchool = await registryModel.findOne(
+      { id: userAccount.school_id },
+      { name: 1, _id: 0 }
+    );
+
+    const bulkInsertedInvitations = await writebulkInvitation(
+      userId,
+      emails,
+      role,
+      userAccount.school_id
+    );
+
+    // the name of the user who sent the email invitation
+    const userName: string = `${userAccount.first_name} ${
+      userAccount.last_name
+    }`;
+    const bulkEmailInvitations = bulkInsertedInvitations
+      .filter(emailInvitation => emailInvitation.inserted)
+      .map((invitation: bulkInvitationInsertResponse) => {
+        // email body
+        const emailBody = {
+          from: NO_REPLY,
+          to: invitation.email,
+          subject: "You were invited to pivot!"
+        };
+
+        if (role === "admin") {
+          emailBody.subject = `${userName} sent you a admin invitation to join pivot!`;
+        } else {
+          emailBody.subject = `${userName} has invited you to join pivot!`;
         }
 
         // constructing the invitation link
         const invitationLink = new URL(process.env.HOST);
-
-        /* if the server is runnig on heroku then it will use https instead of http,
-          this mostly for not runnig into issue for local development (aka localhost). */
         invitationLink.protocol = process.env.IS_DOCKER ? "https" : "http";
         invitationLink.pathname = `/api/invitation/open/${invitation.id}`;
 
-        const redirectUrl = new URL(process.env.HOST);
-        invitationLink.protocol = process.env.IS_DOCKER ? "https" : "http";
-        redirectUrl.pathname = "/signup";
-        redirectUrl.searchParams.append("email", invitation.email);
-
-        // adding redirect url to the template for account creation
-        invitationLink.searchParams.append("redirect_url", redirectUrl.href);
-
         return {
-          body: {
-            // formatting the subject of the email
-            subject,
-            // the email of the person that is being sent the invitation
-            to: invitation.email,
-            from: process.env.NO_REPLY
-          },
+          body: emailBody,
           // things that will to be included in the email template
           templateVariables: {
-            is_professor: invitation.type === "professor",
-            is_admin: invitation.type === "admin",
+            is_professor: role === "professor",
 
-            // the information about the user who is sending the information
-            sender_user_name: sender.name,
-            sender_email: sender.email,
+            sender_user_name: userName,
+            sender_email: userAccount.email,
 
-            // the school information
-            school_name: schoolName,
-
-            // adding to the object for the template veriables
-            link: invitationLink.href
+            link: invitationLink.href,
+            school_name: registeredSchool.name
           }
         };
       });
 
-      // sending the email invitation and compiling the template specified
-      return await sendBlukEmailTemplate(TEMPLATES.INVITATON, blukEmails);
-    } catch (err) {
-      logger.child({ error: err }).error("Failed to send email invitation");
+    // sending the email invitation and compiling the template specified
+    await sendbulkEmailTemplate(TEMPLATES.INVITATON, bulkEmailInvitations);
+
+    return bulkInsertedInvitations;
+  } catch (err) {
+    if (err instanceof Error) {
+      logger
+        .child({ error: err })
+        .error("Failed to create and send bulk of email invitations");
     }
+
+    throw err;
   }
+};
 
-  private async createInvitation(
-    userId: string,
-    email: string,
-    role: string,
-    schoolId: string
-  ): Promise<Invitation> {
-    try {
-      if (userId !== SERVICE) {
-        const userAccount = await userModel.findOne({ id: userId });
-        if (userAccount === null) {
-          logger.child({ user_id: userId }).error("User account was not found");
-
-          throw new Error("User account does not exist");
-        }
-
-        if (userAccount.role === "student") {
-          throw ErrorResponse(
-            InvitationError.INVITATION_PREMISSION_EXCEPTION,
-            "You do not have premission to send invitations for other users to join your school",
-            400
-          );
-        } else if (userAccount.role === "professor" && role === "admin") {
-          role = "student";
-        }
-      }
-
-      const registeredSchool = await registryModel.findOne({
-        id: schoolId
-      });
-      if (registeredSchool !== null) {
-        logger
-          .child({ school_id: schoolId })
-          .error(
-            "Internal error, Invitation was not created becuase the school was not found"
-          );
-
-        throw new Error(
-          "Internal error, Invitation was not created becuase the school was not found"
-        );
-      }
-
-      if (registeredSchool.domain) {
-        if (!email.endsWith(registeredSchool.domain)) {
-          throw ErrorResponse(
-            InvitationError.DOMAIN_EXCEPTION,
-            "The user's email has been blocked for not match the same email domain as the school that your account is regiestered under",
-            400
-          );
-        }
-      }
-
-      // checking if the account does not exist
-      const account = await userModel.findOne({
-        email: {
-          $options: "i",
-          $regex: email
-        },
-        school_id: schoolId
-      });
-      if (account) {
-        throw ErrorResponse(
-          AuthenticationError.ACCOUNT_EXIST_EXCEPTION,
-          "This account already exist under this school",
-          400
-        );
-      }
-
-      const invitation = await invitationModel.findOne({
-        email: {
-          $options: "i",
-          $regex: email
-        },
-        school_id: schoolId
-      });
-      if (invitation) {
-        throw ErrorResponse(
-          InvitationError.INVITATION_EXIST_EXCEPTION,
-          "This invitation has already been sent",
-          400
-        );
-      }
-
-      // creating the time stamp of when the invite was created
-      const createdAt = new Date().toISOString();
-
-      // creating a new record of the invitation that is being sent
-      const newInvitation = new invitationModel({
-        // the email of the user who is receiving the invite
-        email,
-
-        // the person who sent the invite
-        from: userId,
-
-        // the role the will inherit when creating their account
-        type: role,
-
-        // the time of when the invite was created
-        created_at: createdAt,
-
-        // the school code the user is creating the account under
-        school_id: schoolId,
-
-        // invitations will expire seven days later at the end of that day
-        expires_at: dateFn.endOfDay(dateFn.addDays(createdAt, 7)).toISOString()
-      });
-
-      // saving the invitation record and handling expectaion
-      await newInvitation.save();
-
-      return newInvitation.toJSON();
-    } catch (err) {
-      if (err instanceof Error) {
-        logger.child({ error: err }).error("Failed to create invitation");
-      }
-
-      throw err;
+/**
+ * This function returns the invitation from the invitations database collection
+ *
+ * @param invitationId The id of the invitation stored in the invitations collection
+ */
+export const getInvitationInfo = async (
+  invitationId: string
+): Promise<InvitationInfo> => {
+  try {
+    const invitation = await invitationModel.findOne({
+      id: invitationId
+    });
+    if (invitation) {
+      return invitation.toJSON();
     }
-  }
 
-  async getInvitation(invitationId: string): Promise<InvitationInfo> {
-    try {
-      const invitationDocument = await invitationModel.findOne({
-        id: invitationId
-      });
-      if (invitationDocument === null) {
-        throw ErrorResponse(
-          InvitationError.INVITATION_NOT_FOUND_EXCEPTION,
-          "This invitation does not exist",
-          400
+    throw ErrorResponse(
+      InvitationError.INVITATION_NOT_FOUND_EXCEPTION,
+      "Invitation does not exist"
+    );
+  } catch (err) {
+    if (err instanceof Error) {
+      logger
+        .child({ error: err })
+        .error(
+          "Failed to return invitation information from the invitations collection"
         );
-      }
-
-      return {
-        id: invitationDocument.id,
-        type: invitationDocument.type,
-        email: invitationDocument.email,
-        school_id: invitationDocument.school_id,
-        expires_at: invitationDocument.expires_at,
-        created_at: invitationDocument.created_at
-      };
-    } catch (err) {
-      if (err instanceof Error) {
-        logger
-          .child({ error: err })
-          .error("Failed to retrieve doucment in the invitations collection");
-      }
-
-      throw err;
     }
+
+    throw err;
   }
+};
 
-  async sendInvitation(
-    user: string,
-    email: string,
-    role: string,
-    schoolId?: string
-  ): Promise<SentInvitationResponse> {
-    try {
-      // the default arguements for settings for the email template
-      const sender = {
-        email: process.env.NO_REPLY,
-        name: "Pivot"
-      };
+/**
+ * This function creates & sends invitation email
+ *
+ * @param userId The id of the user who is sending the invitation
+ * @param email The email of the recipient of the user who is sending the email
+ * @param role The type of invitation being sent and the role the user will inherit when creating a account
+ */
+export const sendInvitation = async (
+  userId: string,
+  email: string,
+  role: string
+): Promise<SentInvitationResponse> => {
+  try {
+    const userAccount = await userModel.findOne({ id: userId });
+    if (userAccount === null) {
+      logger
+        .child({ user_id: userId })
+        .error("This user account does not exist found");
 
-      if (user !== SERVICE) {
-        const senderAccount = await userModel.findOne({ id: user });
-
-        if (senderAccount === null) {
-          throw new Error(
-            "User account was not found when sending email invitation"
-          );
-        }
-
-        sender.name = `${senderAccount.first_name} ${senderAccount.last_name}`;
-        sender.email = senderAccount.email;
-
-        schoolId = senderAccount.school_id;
-      }
-
-      // fetching the school information
-      const registeredSchool = await registryModel.findOne({ id: schoolId });
-      if (registeredSchool === null) {
-        logger
-          .child({
-            school_id: schoolId
-          })
-          .error("Provided school id does not exist school id");
-
-        throw new Error(
-          "Internal error, Invitation was not created becuase the school was not found"
-        );
-      }
-
-      // fetching the invitation
-      const invitationDocument = await invitationModel.findOne({
-        from: user,
-        email: {
-          $options: "i",
-          $regex: email
-        }
-      });
-
-      let invitation: Invitation;
-      // if the invitation was not found then create the invitation
-      if (invitationDocument === null) {
-        invitation = await this.createInvitation(user, email, role, schoolId);
-      } else {
-        invitation = invitationDocument.toJSON();
-      }
-
-      // sending the email invitation
-      let subject: string;
-      if (invitation.type === "admin") {
-        subject = `${sender.name} sent you a admin invitation`;
-      } else {
-        subject = `${sender.name} has invited you to join ${
-          registeredSchool.name
-        } on pivot`;
-      }
-
-      // constructing the invitation link
-      const invitationLink = new URL(process.env.HOST);
-
-      /* if the server is runnig in a docker container on some cloud service then it will use
-        https instead of http, this mostly for not runnig into issue for local development
-        (aka localhost). */
-      invitationLink.protocol = process.env.IS_DOCKER ? "https" : "http";
-      invitationLink.pathname = `/api/invitation/open/${invitation.id}`;
-
-      const redirectUrl = new URL(process.env.HOST);
-      redirectUrl.protocol = process.env.IS_DOCKER ? "https" : "http";
-      redirectUrl.pathname = "/signup";
-      redirectUrl.searchParams.append("email", invitation.email);
-
-      // adding redirect url to the template for account creation
-      invitationLink.searchParams.append("redirect_url", redirectUrl.href);
-
-      // sending the email invitation and compiling the template specified
-      await sendEmailTemplate(
-        TEMPLATES.INVITATON,
-        {
-          // formatting the subject of the email
-          subject,
-          // the email of the person that is being sent the invitation
-          to: invitation.email,
-          from: process.env.NO_REPLY
-        },
-        // things that will to be included in the email template
-        {
-          is_professor: invitation.type === "professor",
-          is_admin: invitation.type === "admin",
-
-          // the school information
-          school_name: registeredSchool.name,
-
-          // the information about the user who is sending the information
-          sender_user_name: sender.name,
-          sender_email: sender.email,
-
-          // adding to the object for the template veriables
-          link: invitationLink.href
-        }
+      throw new Error(
+        "Internal error, failed to create invitation because user account does not exist"
       );
-
-      return {
-        id: invitation.id,
-        type: invitation.type,
-        email: invitation.email
-      };
-    } catch (err) {
-      if (err instanceof Error) {
-        logger.child({ error: err }).error("Failed to send invitation");
-      }
-
-      throw err;
     }
-  }
 
-  async deleteInvite(user: string, inviteId: string): Promise<string> {
-    try {
-      const status = await invitationModel.deleteOne({
-        from: user,
-        id: inviteId
-      });
-      if (status.n !== 1) {
-        logger.warn("Invitation was not deleted", {
-          "invitation.from": user,
-          "invitation.id": inviteId
-        });
-      }
-
-      return inviteId;
-    } catch (err) {
-      if (err instanceof Error) {
-        logger
-          .child({ error: err })
-          .error(
-            "Failed to delete the invitation in the invitations collection"
-          );
-      }
-
-      throw err;
+    if (userAccount.role === "student") {
+      throw ErrorResponse(
+        InvitationError.INVITATION_PREMISSION_EXCEPTION,
+        "You do not have premission to send invitations for other users to join your school",
+        { http_code: 400 }
+      );
     }
-  }
 
-  async sendBlukInvitation(
-    user: string,
-    emails: string[],
-    role: string,
-    schoolId?: string
-  ): Promise<SentBatchInvitationResponse[]> {
-    try {
-      const sender = {
-        email: process.env.NO_REPLY,
-        name: "Pivot"
-      };
-
-      if (user !== SERVICE) {
-        const userAccount = await userModel.findOne({ id: user });
-        if (userAccount === null) {
-          logger.child({ user_id: user }).error("User account was not found");
-
-          throw new Error("User account does not exist");
-        }
-
-        sender.name = `${userAccount.first_name} ${userAccount.last_name}`;
-        sender.email = userAccount.email;
-
-        schoolId = userAccount.school_id;
-
-        if (userAccount.role === "student") {
-          throw ErrorResponse(
-            InvitationError.INVITATION_PREMISSION_EXCEPTION,
-            "You do not have premission to send invitations for other users to join your school",
-            400
-          );
-        } else if (userAccount.role === "professor" && role === "admin") {
-          role = "student";
-        }
-      }
-
-      const registeredSchool = await registryModel.findOne({ id: schoolId });
-      if (registeredSchool === null) {
-        logger
-          .child({
-            school_id: schoolId
-          })
-          .error("Provided school id does not exist school id");
-
-        throw new Error(
-          "Internal error, Invitation was not created becuase the school was not found"
-        );
-      }
-
-      const invitations: SentBatchInvitationResponse[] = await Promise.all(
-        emails
-          .map(email => ({ email, type: role }))
-          // filering all emails that do not match the schools domain
-          .map((invitation: SentBatchInvitationResponse) => {
-            if (registeredSchool.domain) {
-              invitation.invited = invitation.email.endsWith(
-                registeredSchool.domain
-              );
-            } else {
-              invitation.invited = true;
-            }
-
-            return invitation;
-          })
-          // this step is iterating over each invitation to either send or reject the invitation
-          .map(async (invitation: SentBatchInvitationResponse) => {
-            // checking if the account does not exist
-            const account = await userModel.findOne({
-              email: {
-                $options: "i",
-                $regex: invitation.email
-              },
-              school_id: registeredSchool.id
-            });
-            if (account) {
-              invitation.id = null;
-              invitation.invited = false;
-              invitation.error = AuthenticationError.ACCOUNT_EXIST_EXCEPTION;
-
-              return invitation;
-            }
-
-            // checking if the invitations exist
-            const invitationDocument = await invitationModel.findOne({
-              email: {
-                $options: "i",
-                $regex: invitation.email
-              },
-              school_id: registeredSchool.id
-            });
-            if (invitationDocument) {
-              // the reason why the id is null is because the invitation was not create by the user sending the invitation
-              invitation.id = null;
-
-              invitation.invited = false;
-              invitation.error = AuthenticationError.ACCOUNT_EXIST_EXCEPTION;
-
-              return invitation;
-            }
-
-            try {
-              // creating the time stamp of when the invite was created
-              const createdAt = new Date().toISOString();
-
-              // creating a new record of the invitation that is being sent
-              const newInvitation = new invitationModel({
-                // the email of the user who is receiving the invite
-                email: invitation.email,
-
-                // the person who sent the invite
-                from: user,
-
-                // the role the will inherit when creating their account
-                type: invitation.type,
-
-                // the time of when the invite was created
-                created_at: createdAt,
-
-                // the school code the user is creating the account under
-                school_id: registeredSchool.id,
-
-                // invitations will expire seven days later at the end of that day
-                expires_at: dateFn
-                  .endOfDay(dateFn.addDays(createdAt, 7))
-                  .toISOString()
-              });
-
-              // saving the invitation record and handling expectaion
-              await newInvitation.save();
-
-              invitation.invited = true;
-              invitation.id = newInvitation.id;
-
-              return invitation;
-            } catch (err) {
-              logger
-                .child({ error: err })
-                .error(
-                  "Failed to create and insert invitation in invitation collection"
-                );
-
-              throw err;
-            }
-          })
-      );
-
-      // getting only the invited recipients
-      const invitedRecipients = invitations
-        .filter(invitation => invitation.invited)
-        .map(({ email, type, id }) => ({ email, type, id }));
-
-      // sending the email invitation to all invited recipients
-      await this.sendBlukInvitationEmail(
-        sender,
-        invitedRecipients,
-        registeredSchool.name
-      );
-
-      // if the a bluk of admins was add, then insert them into the registered_admin_members collections
+    if (userAccount.role !== "admin") {
       if (role === "admin") {
-        const invitedAdmins = invitedRecipients.map(
-          invitedAdmin => invitedAdmin.email
-        );
-
-        try {
-          await registry.insertAdminMemberBluk(invitedAdmins, schoolId);
-        } catch (err) {
-          logger
-            .child({ error: err })
-            .error("Failed to insert admins after sending bulk invitations");
-
-          throw err;
-        }
-      }
-
-      return invitations;
-    } catch (err) {
-      if (err instanceof Error) {
-        logger
-          .child({ error: err })
-          .error("Failed to send a email invitations");
-      }
-
-      throw err;
-    }
-  }
-
-  async updateInvitationRole(
-    user: string,
-    inviteId: string,
-    newRole: string
-  ): Promise<InvitationUpdate> {
-    try {
-      const invitation = await invitationModel.findOne({
-        from: user,
-        id: inviteId
-      });
-      if (invitation === null) {
         throw ErrorResponse(
-          InvitationError.INVITATION_NOT_FOUND_EXCEPTION,
-          "This invitation does not exist",
-          400
+          InvitationError.INVITATION_PREMISSION_EXCEPTION,
+          "You do not have premission can not send a admin invitation",
+          { http_code: 401 }
         );
       }
+    }
 
-      if (user !== SERVICE) {
-        const senderAccount = await userModel.findOne({ id: user });
+    const newInvitation = await createInvitation(
+      userAccount.id,
+      email,
+      role,
+      userAccount.school_id
+    );
 
-        if (senderAccount === null) {
-          throw new Error(
-            "User account was not found when sending email invitation"
-          );
+    await sendEmail(newInvitation);
+
+    return {
+      id: newInvitation.id,
+      type: newInvitation.type,
+      email: newInvitation.email
+    };
+  } catch (err) {
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to send a invitation");
+    }
+
+    if (err.code === InvitationError.INVITATION_EXIST_EXCEPTION) {
+      err.message = "Invitation already sent";
+    }
+
+    throw err;
+  }
+};
+
+/**
+ * This function deletes a invitation a user has sent
+ *
+ * @param userId The id of a user
+ * @param email the email of the recipient that was sent the invitation
+ */
+export const deleteInvitation = async (
+  userId: string,
+  email: string
+): Promise<void> => {
+  try {
+    const invitation = await invitationModel.findOne(
+      {
+        email: {
+          $regex: email,
+          $options: "i"
         }
+      },
+      { from: 1, school_id: 1, _id: 0 }
+    );
+    if (invitation === null) {
+      return;
+    }
 
-        if (senderAccount.role === "professor" && newRole === "admin") {
-          throw ErrorResponse(
-            InvitationError.INVITATION_TYPE_ASSIGNMENT,
-            "You do not have the premission to assign this role to this invitation",
-            400
-          );
-        }
-      }
+    const userAccount = await userModel.findOne(
+      {
+        id: userId,
+        school_id: invitation.school_id
+      },
+      { role: 1, _id: 0 }
+    );
+    if (userAccount === null) {
+      logger.error("Internal error, user account doe snot exist");
 
-      const status = await invitationModel.updateOne(
-        {
-          from: user,
-          id: inviteId
+      throw new Error("Internal error, user account doe snot exist");
+    }
+
+    // if the user is a admin of the school they can delete the invitation as well
+    if (userAccount.role === "admin") {
+      await invitationModel.deleteOne({
+        email: {
+          $options: "i",
+          $regex: email
         },
-        {
-          $set: { type: newRole }
+        school_id: invitation.school_id
+      });
+      return;
+    }
+
+    const status = await invitationModel.deleteOne({
+      from: userId,
+      email: {
+        $regex: email,
+        $options: "i"
+      },
+      school_id: invitation.school_id
+    });
+    if (status.n === 1) {
+      logger
+        .child(status)
+        .error("Failed to delete invitation from invitations collections");
+    }
+  } catch (err) {
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to send a invitation");
+    }
+
+    throw err;
+  }
+};
+
+/**
+ * This function updates the invitation stored in the invitations record
+ *
+ * @param userId The id of the user
+ * @param email the email of the recipient that was sent the invitation
+ * @param newRole The new role the user is assigning to the recipient
+ */
+export const updateInvitation = async (
+  userId: string,
+  email: string,
+  newRole: string
+): Promise<void> => {
+  try {
+    const userAccount = await userModel.findOne(
+      { id: userId },
+      { id: 1, school_id: 1, role: 1, _id: 0 }
+    );
+    if (userAccount === null) {
+      logger.error("Internal error, user account not found");
+
+      throw new Error("Internal error, user account not found");
+    }
+
+    if (userAccount.role !== "admin" && newRole === "admin") {
+      newRole = "student";
+    }
+
+    const invitation = await invitationModel.findOne({
+      from: userAccount.id,
+      school_id: userAccount.school_id,
+      email: {
+        $options: "i",
+        $regex: email
+      }
+    });
+    if (invitation === null) {
+      throw ErrorResponse(
+        InvitationError.INVITATION_NOT_FOUND_EXCEPTION,
+        "This invitation does not exist",
+        { http_code: 404 }
+      );
+    }
+
+    const status = await invitationModel.updateOne(
+      {
+        from: userId,
+        school_id: userAccount.school_id,
+        email: {
+          $regex: email,
+          $options: "i"
         }
-      );
-      if (status.n !== 1) {
-        logger.error(
-          "Failed to update document in the invitations collection",
-          {
-            "invitation.from": user,
-            "invitation.id": inviteId
-          }
-        );
-
-        throw new Error("Invitation was not updated");
+      },
+      {
+        $set: {
+          type: newRole,
+          last_updated_at: new Date().toISOString()
+        }
       }
-
-      return {
-        type: newRole,
-        id: invitation.id
-      };
-    } catch (err) {
-      if (err instanceof Error) {
-        logger.error("Failed to updated the invitation type", err);
-      }
-
-      throw err;
-    }
-  }
-
-  async fetchBatch(
-    user: string,
-    page: number = 1,
-    limit: number = 30,
-    search: string = "",
-    latest: boolean = true,
-    type: string = "student"
-  ): Promise<PaginationResults<InvitationBatchResponse>> {
-    try {
-      const acccount = await userModel.findOne({ id: user });
-      if (acccount === null) {
-        throw new Error("User does not exist");
-      }
-
-      type = type.match(/student|professor|admin/) ? type : "student";
-
-      // creaating a aggregation of the invites created and sent by the user
-      const invitations = await invitationModel
-        .aggregate([
-          {
-            $match: { from: user }
-          },
-          {
-            $match: {
-              email: {
-                $regex: search,
-                $options: "i"
-              }
-            }
-          },
-          {
-            $project: {
-              id: 1,
-              _id: 0,
-              type: 1,
-              email: 1,
-              expires_at: 1,
-              created_at: 1
-            }
-          },
-          {
-            $match: { type }
-          }
-        ])
-        .sort({ created_at: latest ? -1 : 1 })
-        // limit of the number of docuemnts to return
-        .limit(limit)
-        // creating a pagination of the return documents
-        .skip(page > 0 ? (page - 1) * limit : 0);
-
-      // checking if there is more invitations that have not been collected
-      const nextPage = await invitationModel
-        .find({
-          type,
-          from: user,
-          // getting the ids of all the collected invitations
-          id: {
-            $nin: invitations.map(invitation => invitation.id)
-          }
-        })
-        .limit(limit)
-        .skip(page + 1 > 0 ? (page + 1 - 1) * limit : 0)
-        .cursor()
-        .next();
-
-      return {
-        page,
-        limit,
-        search,
-        results: invitations,
-        next_page: nextPage ? page + 1 : -1
-      };
-    } catch (err) {
+    );
+    if (status.n === 0) {
       logger.error(
-        "Failed to return a pagination of the user's sent invitations",
-        err
+        "Internal error, Failed to update the invitation type in invitations collection"
       );
 
-      throw err;
+      throw new Error(
+        "Internal error, Failed to update the invitation type in invitations collection"
+      );
     }
-  }
-}
+  } catch (err) {
+    if (err instanceof Error) {
+      logger
+        .child({ error: err })
+        .error("Failed to update invitation in the invitations collection");
+    }
 
-export default new InvitationController();
+    throw err;
+  }
+};
+
+export const sendbulkAdminInvitations = async (
+  emails: string[],
+  schoolId: string
+): Promise<bulkInvitationInsertResponse[]> => {
+  try {
+    const registeredSchool = await registryModel.findOne(
+      { id: schoolId },
+      { name: 1, id: 1, _id: 0 }
+    );
+    if (registeredSchool === null) {
+      logger.error(
+        "Internal error, school was not located in the registries collection"
+      );
+
+      throw new Error(
+        "Internal error, school was not located in the registries collection"
+      );
+    }
+
+    const bulkInsertedInvitations = await writebulkInvitation(
+      APP_NAME,
+      emails,
+      "admin",
+      registeredSchool.id
+    );
+
+    const bulkEmailInvitations = bulkInsertedInvitations
+      .filter(emailInvitation => emailInvitation.inserted)
+      .map((invitation: bulkInvitationInsertResponse) => {
+        // email body
+        const emailBody = {
+          from: NO_REPLY,
+          to: invitation.email,
+          subject: "You have been sent a admin invitation to join pivot!"
+        };
+
+        // constructing the invitation link
+        const invitationLink = new URL(process.env.HOST);
+        invitationLink.protocol = process.env.IS_DOCKER ? "https" : "http";
+        invitationLink.pathname = `/api/invitation/open/${invitation.id}`;
+
+        return {
+          body: emailBody,
+          // things that will to be included in the email template
+          templateVariables: {
+            link: invitationLink.href,
+            school_name: registeredSchool.name
+          }
+        };
+      });
+
+    // sending the email invitation and compiling the template specified
+    await sendbulkEmailTemplate(TEMPLATES.INVITATON, bulkEmailInvitations);
+
+    return bulkInsertedInvitations;
+  } catch (err) {
+    if (err instanceof Error) {
+      logger
+        .child({ error: err })
+        .error("Failed to create and send bulk of email admin invitations");
+    }
+
+    throw err;
+  }
+};

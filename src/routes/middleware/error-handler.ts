@@ -20,10 +20,6 @@ export default (): express.ErrorRequestHandler => {
   ) => {
     // if the error is a instance of the 'Error' object
     if (err instanceof Error) {
-      logger
-        .child({ error: err })
-        .error("Error caught on error handler middleware");
-
       return res.status(ERROR_STATUS_CODE).json({
         error_code: INTERNAL_SERVER_ERROR,
         message:
@@ -33,10 +29,10 @@ export default (): express.ErrorRequestHandler => {
 
     // if the error has the property 'http_code' then set the http status code to the one provided
     let statusCode: number = ERROR_STATUS_CODE;
-    if (err.http_code) {
-      statusCode = err.http_code;
+    if (err.context.http_code) {
+      statusCode = err.context.http_code;
 
-      delete err.http_code;
+      delete err.context.http_code;
     }
 
     res.status(statusCode).json(err);

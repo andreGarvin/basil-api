@@ -10,7 +10,6 @@ const app = express();
 import * as http from "http";
 
 const server = new http.Server(app);
-
 // exporting the server to be consumed by socket.io in the sockets file
 export default server;
 
@@ -31,16 +30,7 @@ import routes from "./routes";
 
 // logger util
 import logger from "./common/logger";
-
-// server port number
-const PORT = parseInt(process.env.PORT, 10) || 8081;
-
-// default origins that are exposed to make cros origin http request
-const ORIGIN_WHITE_LIST: string[] = ["http://localhost:8080"];
-
-// mongo database connection string
-// if tests are running connect the server to a test database
-const MONGO_URI: string = process.env.MONGO_URI;
+import { MONGO_URI, ORIGIN_WHITE_LIST, PORT } from "./config";
 
 // this checks if the server has all environment variables needed
 if (process.env.NODE_ENV !== "test") {
@@ -115,15 +105,6 @@ app.use(helmet());
 // JSON body parsing
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-
-// This adds any more origins to the origin whit list
-if (process.env.ORIGINS) {
-  const ORIGINS: string[] = process.env.ORIGINS.split(",").filter(host =>
-    host.trim()
-  );
-
-  ORIGIN_WHITE_LIST.push(...ORIGINS);
-}
 
 /* This allows other web applications to make http requests to
 the api, meaning websites that are not of the same origin or

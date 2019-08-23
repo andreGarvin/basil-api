@@ -1,11 +1,9 @@
-export type UserRole = "student" | "professor" | "admin";
-
 export interface UserAccount {
   id: string;
   hash: string;
+  role: string;
   token: string;
   email: string;
-  role: UserRole;
   verified: boolean;
   last_name: string;
   photo_url: string;
@@ -16,4 +14,13 @@ export interface UserAccount {
   description?: string;
   last_login_at?: string;
   temporary_reset_password_token?: string;
+}
+
+export interface newUserInfo {
+  role: string;
+  email: string;
+  password: string;
+  last_name: string;
+  school_id: string;
+  first_name: string;
 }

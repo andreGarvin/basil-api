@@ -1,4 +1,4 @@
-import { Document, Schema, set, Model, model } from "mongoose";
+import { Document, Schema, set, model } from "mongoose";
 
 import * as uuid from "uuid/v4";
 
@@ -14,7 +14,7 @@ const invitationSchema = new Schema({
   // the invitation id
   id: {
     default: () =>
-      uuid()
+      uuid(process.env.HOST, uuid.URL)
         .split("-")
         .join(""),
     required: true,
@@ -30,6 +30,7 @@ const invitationSchema = new Schema({
   // The person the invite is being sent to
   email: {
     required: true,
+    unique: true,
     type: String
   },
 

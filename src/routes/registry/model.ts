@@ -1,23 +1,36 @@
-import { Document, Schema, Model, model } from "mongoose";
+import * as uuid from "uuid/v4";
+
+import { Document, Schema, model } from "mongoose";
 
 // types
-import { RegistratedSchool } from "../types";
+import { RegistratedSchool } from "./types";
 
 export interface RegistratedSchoolModel extends RegistratedSchool, Document {
   id: string;
 }
 
 const registrySchema = new Schema({
+  // id of the school
+  id: {
+    // generating random id string
+    default: () => uuid(process.env.HOST, uuid.URL),
+    required: true,
+    type: String
+  },
+
   // the type of school that was inserted into the registry
   type: String,
 
   /* This is the schools license key, currently used to indentify
-    admins and professors when creating a account.
-
-    NOTE: This will be more relevent when the anayltics dashboard is created
-    for handling billing schools
+  admins and professors when creating a account.
+  
+  NOTE: This will be more relevent when the anayltics dashboard is created
+  for handling billing schools
   */
-  license_key: String,
+  license_key: {
+    default: () => uuid(process.env.HOST, uuid.URL),
+    type: String
+  },
 
   /* the email domain of the school
 
@@ -25,11 +38,6 @@ const registrySchema = new Schema({
     school if they do not have the same email domain as the school
   */
   domain: String,
-
-  id: {
-    required: true,
-    type: String
-  },
 
   // The name of the school
   name: {
@@ -50,4 +58,4 @@ const registrySchema = new Schema({
   }
 });
 
-export default model<RegistratedSchoolModel>("registry", registrySchema);
+export default model<RegistratedSchoolModel>("registries", registrySchema);

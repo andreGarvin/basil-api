@@ -3,71 +3,67 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import { test } from "ava";
-
 import * as request from "supertest";
+import * as faker from "faker";
 
-import * as uuid from "uuid/v4";
+// interface Context {
+//   registration: { name: string; domain?: string };
+//   admins: string[];
+// }
+// const test = ava as TestInterface<Context>;
 
-// models
-import adminMemberModel from "../../routes/registry/models/member.model";
-import registryModel from "../../routes/registry/models/registry.model";
-import invitationModel from "../../routes/invitation/model";
+// database helper functions
+import * as db from "../helper";
 
-// server
+// config
+import { APP_NAME } from "../../config";
+
 import app from "../../index";
 
 // error codes
-// import { VALIDATION_EXCEPTION } from "../../common/error-codes";
-// import RegistryError from "../../routes/registry/error-codes";
+import { INTERNAL_SERVER_ERROR } from "../../common/error-codes";
+import RegistryError from "../../routes/registry/error-codes";
 
 test.beforeEach(async t => {
-  const SCHOOL_NAME = uuid();
-
-  const SCHOOL_DOMAIN = `@${SCHOOL_NAME}.edu`;
+  const [name] = faker.company.companyName(0).split(" ");
 
   // The request that be sent to the backend
   t.context.registration = {
-    domain: SCHOOL_DOMAIN,
-    name: SCHOOL_NAME,
-    admins: [`jane.doe${SCHOOL_DOMAIN}`]
+    name: name.toLowerCase(),
+    domain: `@${name.toLowerCase()}.edu`
   };
+
+  t.context.admins = [
+    faker.internet.email(
+      faker.name.firstName(),
+      faker.name.lastName(),
+      t.context.registration.domain.slice(1)
+    ),
+    faker.internet.email(
+      faker.name.firstName(),
+      faker.name.lastName(),
+      t.context.registration.domain.slice(1)
+    )
+  ];
 });
 
 test.afterEach.always(async t => {
-  const school = await registryModel.findOne({
-    name: t.context.registration.name
-  });
+  await db.clearInvitations();
 
-  await registryModel.deleteMany({
-    id: school.id
-  });
-
-  await adminMemberModel.deleteMany({
-    school_id: school.id
-  });
-
-  await invitationModel.deleteMany({
-    email: new RegExp(t.context.registration.domain)
-  });
+  await db.clearRegistry();
 });
 
-test.only("/api/registry/register", async t => {
+test("/api/registry/register", async t => {
   const response = await request(app)
     .post("/api/registry/register")
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  if (response.status !== 200) {
-    t.log(response.body);
-  }
-
   t.is(response.status, 200, "should return a status code of 200");
 
   t.is(typeof response.body.school_id, "string");
 
-  const registeredSchool = await registryModel.findOne({
-    name: t.context.registration.name
-  });
+  const registeredSchool = await db.findSchoolbyId(response.body.school_id);
 
   t.is(response.body.school_id, registeredSchool.id);
 
@@ -87,554 +83,343 @@ test.only("/api/registry/register", async t => {
       domain: t.context.registration.domain
     }
   );
+});
 
-  const adminMembers = await adminMemberModel.find({
-    school_id: registeredSchool.id
-  });
+test("/api/registry/register (inserting a school with no domain)", async t => {
+  delete t.context.registration.domain;
 
-  t.is(adminMembers.length, 1, "admins should exist");
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
 
-  const [adminMember] = adminMembers;
+  t.is(response.status, 200, "should return a status code of 200");
 
-  t.deepEqual(
-    [
-      {
-        user_id: adminMember.user_id
-      }
-    ],
-    [
-      {
-        user_id: t.context.registration.admins[0]
-      }
-    ]
+  t.is(typeof response.body.school_id, "string");
+
+  const registeredSchool = await db.findSchoolbyId(response.body.school_id);
+
+  t.is(response.body.school_id, registeredSchool.id);
+});
+
+test("/api/registry/register (trying to register the same school again)", async t => {
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(response.status, 200, "should return a status code of 200");
+
+  t.is(typeof response.body.school_id, "string");
+
+  const registeredSchool = await db.findSchoolbyId(response.body.school_id);
+
+  t.not(registeredSchool, null);
+
+  t.is(response.body.school_id, registeredSchool.id);
+
+  const responseTwo = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(responseTwo.status, 400, "should return a status code of 400");
+
+  t.is(responseTwo.body.error_code, RegistryError.REGISTRATION_EXIST_EXCEPTION);
+
+  t.context.registration.name =
+    t.context.registration.name[0].toUpperCase() +
+    t.context.registration.name.slice(1);
+
+  const responseThree = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(
+    responseThree.status,
+    400,
+    "should return a status code of 400, for case-insensitive as well"
   );
 
-  const invitations = await invitationModel.find({
-    school_id: registeredSchool.id
-  });
+  t.is(
+    responseThree.body.error_code,
+    RegistryError.REGISTRATION_EXIST_EXCEPTION
+  );
+});
 
-  t.is(invitations.length, 1, "admin invitation should exist");
+test("/api/registry/register (trying to register the same school again, but not providing a domain)", async t => {
+  delete t.context.registration.domain;
 
-  t.is(adminMembers.length, invitations.length, "should be the same length");
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
 
-  const [email] = t.context.registration.admins;
-  const adminInvitation = await invitationModel.findOne({
-    email,
-    school_id: registeredSchool.id
-  });
+  t.is(response.status, 200, "should return a status code of 200");
+
+  t.is(typeof response.body.school_id, "string");
+
+  const registeredSchool = await db.findSchoolbyId(response.body.school_id);
+
+  t.not(registeredSchool, null);
+
+  t.is(response.body.school_id, registeredSchool.id);
+
+  const responseTwo = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(responseTwo.status, 400, "should return a status code of 400");
 
   t.deepEqual(
+    { error_code: responseTwo.body.error_code },
     {
-      from: adminInvitation.from,
-      type: adminInvitation.type
-    },
-    {
-      from: "pivot-api",
-      type: "admin"
+      error_code: RegistryError.REGISTRATION_EXIST_EXCEPTION
     }
   );
 });
 
-// test("/api/registry/register (trying to register the same school twice)", async t => {
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(
-//     response.status,
-//     200,
-//     "should return a status code of 200 for sucessfully inserting the school into the registry and adding inviting the admins to the school"
-//   );
-
-//   let registeredSchool = await registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.not(registeredSchool, null, "The school should be stored in the database");
-
-//   const invitation = await invitationModel.find({
-//     school_code: response.body.code
-//   });
-//   t.notDeepEqual(invitation, [], "This should not be a empty array");
-
-//   const responseTwo = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (responseTwo.status !== 400) {
-//     t.log(responseTwo.body);
-//   }
-
-//   t.is(
-//     responseTwo.status,
-//     400,
-//     "should return a status code of 200 for sucessfully inserting the school into the registry and adding inviting the admins to the school"
-//   );
-
-//   t.deepEqual(responseTwo.body, {
-//     school_code: response.body.code,
-//     code: RegistryError.REGISTRATION_EXIST_EXCEPTION,
-//     message: `'${
-//       t.context.registration.school_name
-//     }' is a already a registred school in the database registry`
-//   });
-
-//   const schoolCount = await db.registryModel
-//     .find({
-//       name: t.context.registration.school_name
-//     })
-//     .countDocuments();
-
-//   t.is(schoolCount, 1, "Should only be one school under this this name");
-// });
-
-// test("/api/registry/register (sending invalid data)", async t => {
-//   const requestBody = {
-//     school_name: "",
-//     domain: "gmail.com",
-//     admins: [
-//       {
-//         name: "John Doe",
-//         email: "johndoegmailcom"
-//       },
-//       {
-//         email: `jane.doe@${t.context.registration.domain}`
-//       }
-//     ]
-//   };
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(requestBody);
-
-//   if (response.status !== 400) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 400, "This should return a status code of 200");
-
-//   t.deepEqual(response.body, {
-//     code: VALIDATION_EXCEPTION,
-//     message:
-//       "There seems to be issue with the provided configure for registering",
-//     errors: [
-//       {
-//         context: {
-//           key: "domain"
-//         },
-//         message: "the domain must be a valid email domain"
-//       },
-//       {
-//         context: {
-//           key: "school_name"
-//         },
-//         message: "You must provide the name of the school you are registering"
-//       },
-//       {
-//         context: {
-//           key: "email",
-//           parent_field: "admins",
-//           pos: 0
-//         },
-//         message:
-//           "The email of the admin is required and needs to be a valid email"
-//       }
-//     ]
-//   });
-// });
-
-// test("/api/registry/register (providing a generic domain)", async t => {
-//   t.context.registration.domain = "@gmail.com";
-
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 400) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 400, "should return a status code of 400");
-
-//   const { school_name, domain, admins } = t.context.registration;
-
-//   t.deepEqual(response.body, {
-//     code: RegistryError.DOMAIN_REGISTRATION_EXCEPTION,
-//     message:
-//       "The email domain that you have provided is not a private email domain or is open email domain."
-//   });
-
-//   const registeredSchool = await db.registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.is(registeredSchool, null, "The school should be stored in the database");
-// });
-
-// test("/api/registry/register (providing a domain, but some of the the admins email do not match the domain)", async t => {
-//   t.context.registration.admins = [
-//     {
-//       email: "jane.doe@gmail.com",
-//       name: "jane doe"
-//     },
-//     {
-//       email: `jhondoe${t.context.registration.domain}`,
-//       name: "john doe"
-//     },
-//     {
-//       email: `jackdoe${t.context.registration.domain}`,
-//       name: "jack doe"
-//     },
-//     {
-//       email: "michealcera@scottpilgrimversetheworld.net",
-//       name: "micheal cera"
-//     }
-//   ];
-
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 200, "should return a status code of 200");
-
-//   t.truthy(
-//     response.body.code,
-//     "school code in the response body should not be falsey value"
-//   );
-
-//   t.truthy(
-//     response.body.license_key,
-//     "school license key in the response body should not be falsey value"
-//   );
-
-//   const registeredSchool = await db.registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.not(registeredSchool, null, "The school should be stored in the database");
-
-//   const invitations = await db.invitationModel.find({
-//     school_code: response.body.code
-//   });
-//   t.notDeepEqual(invitations, [], "This should not be a empty array");
-
-//   delete response.body.code;
-//   delete response.body.license_key;
-
-//   t.deepEqual(response.body, {
-//     domain: t.context.registration.domain,
-//     school_name: t.context.registration.school_name,
-//     admins: [
-//       {
-//         invited: false,
-//         email: "jane.doe@gmail.com",
-//         message:
-//           "The user's email has been blocked for not match the same email domain as the school that your account is regiestered under"
-//       },
-//       { invited: true, email: `jhondoe${t.context.registration.domain}` },
-//       { invited: true, email: `jackdoe${t.context.registration.domain}` },
-//       {
-//         invited: false,
-//         email: "michealcera@scottpilgrimversetheworld.net",
-//         message:
-//           "The user's email has been blocked for not match the same email domain as the school that your account is regiestered under"
-//       }
-//     ]
-//   });
-// });
-
-// test("/api/registry/register (providing a domain, but all of the the admins email do not match the domain)", async t => {
-//   t.context.registration.admins = [
-//     {
-//       email: "jane.doe@gmail.com",
-//       name: "jane doe"
-//     },
-//     {
-//       email: `jhondoe@hotmail.com`,
-//       name: "john doe"
-//     },
-//     {
-//       email: `jackdoe@yahoo.com`,
-//       name: "jack doe"
-//     },
-//     {
-//       email: "michealcera@scottpilgrimversetheworld.net",
-//       name: "micheal cera"
-//     }
-//   ];
-
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 400) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 400, "should return a status code of 400");
-
-//   const registeredSchool = await db.registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.is(registeredSchool, null, "The school should be stored in the database");
-
-//   const invitation = await db.invitationModel.find({
-//     school_code: response.body.code
-//   });
-//   t.deepEqual(invitation, [], "This should not be a empty array");
-
-//   t.deepEqual(response.body, {
-//     code: RegistryError.ADMIN_REGISTRATION_EXCEPTION,
-//     message:
-//       "It seems like all the admins you are registering for this school did not have a same email domain that was provided"
-//   });
-// });
-
-// test("/api/registry/register (not providing a domain for the school)", async t => {
-//   delete t.context.registration.domain;
-
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 200, "should return a status code of 200");
-
-//   const registeredSchool = await db.registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.not(registeredSchool, null, "The school should be stored in the database");
-
-//   const invitation = await db.invitationModel.find({
-//     school_code: response.body.code
-//   });
-//   t.notDeepEqual(invitation, [], "This should not be a empty array");
-
-//   response.body.admins = response.body.admins.map(admin => admin.invited);
-
-//   t.deepEqual(response.body, {
-//     domain: "",
-//     admins: [true],
-//     code: registeredSchool.code,
-//     school_name: registeredSchool.name,
-//     license_key: registeredSchool.license_key
-//   });
-// });
-
-// test("/api/registry/register (adding the same admin twice)", async t => {
-//   t.context.registration.admins.push({
-//     email: `jane.doe${t.context.registration.domain}`,
-//     name: "jane doe"
-//   });
-
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 200, "should return a status code of 200");
-
-//   t.is(
-//     typeof response.body.code,
-//     "string",
-//     "school code in the response body should not be falsey value"
-//   );
-
-//   t.is(
-//     typeof response.body.license_key,
-//     "string",
-//     "school license key in the response body should not be falsey value"
-//   );
-
-//   const registeredSchool = await db.registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.not(registeredSchool, null, "The school should be stored in the database");
-
-//   const invitations = await db.invitationModel.find({
-//     school_code: response.body.code
-//   });
-//   t.notDeepEqual(invitations, [], "This should not be a empty array");
-
-//   t.is(invitations.length, 1, "Should only be one invitation created");
-
-//   delete response.body.code;
-//   delete response.body.license_key;
-
-//   t.deepEqual(response.body, {
-//     domain: t.context.registration.domain,
-//     school_name: t.context.registration.school_name,
-//     admins: [
-//       {
-//         invited: true,
-//         email: `jane.doe${t.context.registration.domain}`
-//       }
-//     ]
-//   });
-// });
-
-// test("/api/registry/authenticate/user (failed attempts for authenticating as a registry admin)", async t => {
-//   t.plan(3);
-
-//   const response = await request(app)
-//     .post("/api/registry/authenticate")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send({
-//       email: "john.doe@kentro.co"
-//     });
-
-//   if (response.status !== 401) {
-//     t.log(response.text);
-//   }
-
-//   t.is(response.status, 401);
-
-//   const responseTwo = await request(app)
-//     .post("/api/registry/authenticate")
-//     .set("x-api-key", "FEFEFE")
-//     .send({
-//       email: "andre@kentro.co"
-//     });
-
-//   if (responseTwo.status !== 401) {
-//     t.log(responseTwo.body);
-//   }
-
-//   t.is(responseTwo.status, 401);
-
-//   const responseThree = await request(app)
-//     .post("/api/registry/authenticate")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send({
-//       email: "john.doe@gmail.com"
-//     });
-
-//   if (responseThree.status !== 401) {
-//     t.log(responseThree.body);
-//   }
-
-//   t.is(responseThree.status, 401);
-// });
-
-// test("/api/registry/authenticate/user", async t => {
-//   const response = await request(app)
-//     .post("/api/registry/authenticate")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send({ email: "andre@kentro.co" });
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 200);
-// });
-
-// test("/api/registry/register (authenticating as a white list user and creatign a school in the registry)", async t => {
-//   const agent = await request.agent(app);
-
-//   const authentication = await agent
-//     .post("/api/registry/authenticate")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send({ email: "andre@kentro.co" });
-
-//   if (authentication.status !== 200) {
-//     t.log(authentication.body);
-//   }
-
-//   t.is(authentication.status, 200, "Should return a status code of 200");
-
-//   const response = await agent
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(
-//     response.status,
-//     200,
-//     "should return a status code of 200 for sucessfully inserting the school into the registry and adding inviting the admins to the school"
-//   );
-
-//   const registeredSchool = await db.registryModel.findOne({
-//     name: t.context.registration.school_name
-//   });
-//   t.not(registeredSchool, null, "The school should be stored in the database");
-
-//   const invitations = await db.invitationModel.find({
-//     school_code: response.body.code
-//   });
-//   t.not(invitations, [], "This should not be a empty array");
-
-//   t.is(invitations[0].from, "kentro");
-
-//   t.is(invitations[0].school_code, response.body.code);
-// });
-
-// test("/api/registry/search", async t => {
-//   const agent = request.agent(app);
-
-//   const response = await request(app)
-//     .post("/api/registry/register")
-//     .set("x-api-key", process.env.API_KEY)
-//     .send(t.context.registration);
-
-//   if (response.status !== 200) {
-//     t.log(response.body);
-//   }
-
-//   t.is(response.status, 200, "should return status of 200");
-
-//   const document = await db.registryModel.findOne({
-//     domain: t.context.registration.domain
-//   });
-//   t.not(document, null, "document should exist");
-
-//   const responseTwo = await agent.get("/api/registry/search");
-
-//   if (responseTwo.status !== 200) {
-//     t.log(responseTwo.body);
-//   }
-
-//   t.is(responseTwo.status, 200);
-
-//   let schools = await db.registryModel.find({});
-//   t.notDeepEqual(schools, [], "should not be a emoty array");
-
-//   schools = schools.map(school => {
-//     return {
-//       name: school.name,
-//       code: school.code,
-//       domain: school.domain,
-//       created_at: new Date(school.created_at).toISOString()
-//     };
-//   });
-
-//   t.deepEqual(responseTwo.body, {
-//     results: schools,
-//     next_page: -1,
-//     search: "",
-//     limit: 15,
-//     page: 1
-//   });
-// });
+test("/api/registry/register (sending invalid data)", async t => {
+  // wrong request body
+  const requestBody = {
+    school_name: "",
+    domain: "gmail.com",
+    admins: [
+      "johndoe@gmailcom",
+      {
+        email: `jane.doe@${t.context.registration.domain}`
+      }
+    ]
+  };
+
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(requestBody);
+
+  t.is(response.status, 400, "This should return a status code of 400");
+
+  t.deepEqual(response.body, {
+    context: {
+      errors: [
+        { message: "the domain must be a valid email domain", field: "domain" },
+        {
+          message:
+            "You must provide the name of the school you are registering",
+          field: "name"
+        },
+        { message: '"school_name" is not allowed', field: "school_name" },
+        { message: '"admins" is not allowed', field: "admins" }
+      ]
+    },
+    message: "There seems to be issue with the information provided",
+    error_code: "VALIDATION_EXCEPTION"
+  });
+});
+
+test("/api/registry/register (providing a fake api key)", async t => {
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", "ndsjksnklfsdnklfsndlknkl");
+
+  t.is(response.status, 401);
+
+  const responseTwo = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", "FEFEFE");
+
+  t.is(responseTwo.status, 401);
+
+  const responseThree = await request(app).post("/api/registry/register");
+
+  t.is(responseThree.status, 401);
+});
+
+test("/api/registry/invite/admin/bulk", async t => {
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(response.status, 200, "should return a status code of 200");
+
+  const responseTwo = await request(app)
+    .post("/api/registry/invite/admin/bulk")
+    .set("x-api-key", process.env.API_KEY)
+    .send({
+      school_id: response.body.school_id,
+      emails: t.context.admins
+    });
+
+  t.is(responseTwo.status, 200, "should return a status code of 200");
+
+  t.deepEqual(responseTwo.body, { sent: true });
+
+  const invitations = await db.returnInvitationsBySchoolId(
+    response.body.school_id
+  );
+
+  t.is(invitations.length, 2, "admin invitations should exist");
+
+  const [email] = t.context.admins;
+  const adminInvitation = await db.findInvitationByEmail(email);
+
+  t.is(adminInvitation.from, APP_NAME);
+
+  t.deepEqual(
+    {
+      from: adminInvitation.from,
+      type: adminInvitation.type,
+      school_id: adminInvitation.school_id
+    },
+    {
+      type: "admin",
+      from: APP_NAME,
+      school_id: response.body.school_id
+    }
+  );
+});
+
+test("/api/registry/invite/admin/bulk (sending invalid data)", async t => {
+  const response = await request(app)
+    .post("/api/registry/invite/admin/bulk")
+    .set("x-api-key", process.env.API_KEY)
+    .send({
+      school_id: 2323
+    });
+
+  t.is(response.status, 400, "should return a status code of 400");
+
+  t.deepEqual(response.body, {
+    context: {
+      errors: [
+        { message: '"school_id" must be a string', field: "school_id" },
+        { message: '"emails" is required', field: "emails" }
+      ]
+    },
+    message: "There seems to be issue with the information provided",
+    error_code: "VALIDATION_EXCEPTION"
+  });
+
+  const responseTwo = await request(app)
+    .post("/api/registry/invite/admin/bulk")
+    .set("x-api-key", process.env.API_KEY)
+    .send({
+      school_id: "2323",
+      emails: ["some-fake-text"]
+    });
+
+  t.is(responseTwo.status, 400, "should return a status code of 400");
+});
+
+test("/api/registry/invite/admin/bulk (sending a bulk invite for a school, that does not exist)", async t => {
+  const response = await request(app)
+    .post("/api/registry/invite/admin/bulk")
+    .set("x-api-key", process.env.API_KEY)
+    .send({
+      school_id: "fake_school_id",
+      emails: t.context.admins
+    });
+
+  t.is(response.status, 500, "should return a status code of 500");
+
+  t.deepEqual(response.body.error_code, INTERNAL_SERVER_ERROR);
+
+  const invitations = await db.returnInvitationsBySchoolId(
+    response.body.school_id
+  );
+
+  t.is(invitations.length, 0, "admin invitations should not exist");
+});
+
+test("/api/registry/register (providing a domain, but some of the the admins email do not match the domain)", async t => {
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(response.status, 200, "should return a status code of 200");
+
+  t.context.admins = [
+    ...t.context.admins,
+    t.context.admins[0],
+    "jane.doe@gmail.com",
+    "michealcera@scottpilgrimversetheworld.net"
+  ];
+
+  const responseTwo = await request(app)
+    .post("/api/registry/invite/admin/bulk")
+    .set("x-api-key", process.env.API_KEY)
+    .send({
+      school_id: response.body.school_id,
+      emails: t.context.admins
+    });
+
+  t.is(responseTwo.status, 200, "should return a status code of 200");
+
+  const invitations = await db.returnInvitationsBySchoolId(
+    response.body.school_id
+  );
+
+  t.is(invitations.length, 2, "There should only be two admin invites");
+
+  t.notDeepEqual(invitations, [], "This should not be a empty array");
+});
+
+test("/api/registry/search", async t => {
+  const response = await request(app)
+    .post("/api/registry/register")
+    .set("x-api-key", process.env.API_KEY)
+    .send(t.context.registration);
+
+  t.is(response.status, 200, "should return status of 200");
+
+  const responseTwo = await request(app).get("/api/registry/search");
+
+  t.is(responseTwo.status, 200, "should return status of 200");
+
+  const school = await db.findSchoolbyId(response.body.school_id);
+
+  t.deepEqual(responseTwo.body, {
+    results: [
+      {
+        id: school.id,
+        name: school.name
+      }
+    ],
+    next_page: -1,
+    search: "",
+    limit: 15,
+    page: 1
+  });
+
+  const responseThree = await request(app).get(
+    "/api/registry/search?search=we"
+  );
+
+  t.is(responseThree.status, 200, "should return status of 200");
+
+  t.deepEqual(responseThree.body, {
+    next_page: -1,
+    search: "we",
+    results: [],
+    limit: 15,
+    page: 1
+  });
+
+  const responseFour = await request(app).get(
+    "/api/registry/search?page=23&limit=hell"
+  );
+
+  t.is(responseFour.status, 200, "should return status of 200");
+
+  t.deepEqual(responseFour.body, {
+    next_page: -1,
+    results: [],
+    search: "",
+    limit: 15,
+    page: 23
+  });
+});

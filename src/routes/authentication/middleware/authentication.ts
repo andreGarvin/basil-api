@@ -2,13 +2,13 @@ import * as express from "express";
 
 // middlware
 // import basicAuthenticationMiddleware from "./basic_authentication";
-import jwtAuthenticationMiddleware from "../token/middleware/token-authentication";
+import tokenAuthenticationMiddleware from "../token/middleware/token-authentication";
 
 // utils
 import logger from "../../../common/logger";
 
 // error code
-const { AuthenticationError } = require("../../common/error_codes");
+import AuthenticationError from "../error-codes";
 
 /**
  * This middleware checks if the any incoming request has been authenticated
@@ -33,6 +33,6 @@ const authenticationMiddleware = (
 
 export default [
   // basicAuthenticationMiddleware,
-  jwtAuthenticationMiddleware,
+  tokenAuthenticationMiddleware,
   authenticationMiddleware
 ];

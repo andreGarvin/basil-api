@@ -1,17 +1,17 @@
 export interface ServiceError {
-  http_code: number;
   message: string;
   error_code: string;
+  context: { [key: string]: any };
 }
 
 export default function ErrorConstructor(
   errorCode: string,
   message: string,
-  httpCode?: number
+  context?: { [key: string]: any }
 ): ServiceError {
   return {
+    context,
     message: message,
-    http_code: httpCode,
     error_code: errorCode
   };
 }

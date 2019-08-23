@@ -13,8 +13,3 @@ export interface RegisteredSchoolInfo {
   name: string;
   domain?: string;
 }
-
-export interface AdminMember {
-  user_id: string;
-  school_id: string;
-}
