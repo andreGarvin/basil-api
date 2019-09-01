@@ -6,9 +6,9 @@
   "scripts": {
     "start": "node .",
     "start:dev": "NODE_ENV=dev nodemon .",
+    "build": "tsc --project tsconfig.json",
     "test": "NODE_DEBUG=true NODE_ENV=test nyc ava",
-    "build": "rm -r build && tsc --project tsconfig.json",
-    "build:watch": "rm -r build && tsc -w --project tsconfig.json",
+    "build:watch": "tsc -w --project tsconfig.json",
     "test:unit": "NODE_ENV=test nyc ava ./build/tests/unit/*.test.js",
     "test:integration": "NODE_ENV=test nyc ava ./build/tests/integration/*.test.js"
   },
