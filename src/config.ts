@@ -31,11 +31,11 @@ export const TEMP_TOKEN_EXPIRATION =
 // mongo database connection string
 
 // mongodb test database
-const MONGO_TEST_URI = "mongodb://localhost:27017/pivot-dev";
+const MONGO_TEST_URI = "mongodb://localhost:27017/pivot-test";
 
 // if tests are running connect the server to a test database
 export const MONGO_URI: string =
-  process.env.NODE_ENV === "test" ? process.env.MONGO_URI : MONGO_TEST_URI;
+  process.env.NODE_ENV === "test" ? MONGO_TEST_URI : process.env.MONGO_URI;
 
 export const NO_REPLY = process.env.NO_REPLY || "Pivot <no-reply@pivotlms.com>";
 
