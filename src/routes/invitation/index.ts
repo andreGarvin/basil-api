@@ -12,8 +12,8 @@ import {
 } from "../../common/utils/send-email-template";
 
 // models
+import userModel from "../authentication/model";
 import registryModel from "../registry/model";
-import userModel from "../user/model";
 import invitationModel from "./model";
 
 // config
@@ -29,8 +29,13 @@ import {
 
 // error codes
 import AuthenticationError from "../authentication/error-codes";
-import RegistryError from "../registry/error-codes";
 import InvitationError from "./error-codes";
+
+export enum InvitationRoles {
+  ADMIN = "admin",
+  STUDENT = "student",
+  PROFESSOR = "professor"
+}
 
 // helper fucntion
 /**
@@ -72,7 +77,7 @@ const sendEmail = async (invitation: Invitation): Promise<void> => {
 
   // if the server create the invitation
   if (invitation.from === APP_NAME) {
-    if (invitation.type !== "admin") {
+    if (invitation.type !== InvitationRoles.ADMIN) {
       logger.error(
         "Internal error, The service was sending a non admin invitation"
       );
@@ -93,14 +98,14 @@ const sendEmail = async (invitation: Invitation): Promise<void> => {
   });
 
   const userName: string = `${userAccount.first_name} ${userAccount.last_name}`;
-  if (invitation.type === "admin") {
+  if (invitation.type === InvitationRoles.ADMIN) {
     emailBody.subject = `${userName} sent you a admin invitation to join pivot!`;
   } else {
     emailBody.subject = `${userName} has invited you to join pivot!`;
   }
 
   const variables = {
-    is_professor: invitation.type === "professor",
+    is_professor: invitation.type === InvitationRoles.PROFESSOR,
 
     sender_email: userAccount.email,
     sender_user_name: `${userAccount.first_name} ${userAccount.last_name}`,
@@ -147,7 +152,7 @@ const createInvitation = async (
       if (!email.endsWith(registeredSchool.domain)) {
         throw ErrorResponse(
           InvitationError.DOMAIN_EXCEPTION,
-          "The user's email has been blocked for not match the same email domain as the school that your account is regiestered under",
+          "The user's email has been blocked for not match the same domain email as the school that your account is regiestered under",
           { http_code: 400 }
         );
       }
@@ -203,7 +208,7 @@ const createInvitation = async (
       created_at: createdAt,
 
       // the type of invitation and role the will inherit when creating their account
-      type: role || "student",
+      type: role || InvitationRoles.STUDENT,
 
       expires_at: expirationDate
     });
@@ -381,7 +386,7 @@ export const sendbulkInvitation = async (
       );
     }
 
-    if (userAccount.role === "student") {
+    if (userAccount.role === InvitationRoles.STUDENT) {
       throw ErrorResponse(
         InvitationError.INVITATION_PREMISSION_EXCEPTION,
         "Premission denied to send invitations for other users to join your school",
@@ -389,8 +394,8 @@ export const sendbulkInvitation = async (
       );
     }
 
-    if (userAccount.role === "admin") {
-      if (role === "admin") {
+    if (userAccount.role === InvitationRoles.ADMIN) {
+      if (role === InvitationRoles.ADMIN) {
         throw ErrorResponse(
           InvitationError.INVITATION_PREMISSION_EXCEPTION,
           "You do not have premission can not send a admin invitation",
@@ -412,9 +417,7 @@ export const sendbulkInvitation = async (
     );
 
     // the name of the user who sent the email invitation
-    const userName: string = `${userAccount.first_name} ${
-      userAccount.last_name
-    }`;
+    const userName: string = `${userAccount.first_name} ${userAccount.last_name}`;
     const bulkEmailInvitations = bulkInsertedInvitations
       .filter(emailInvitation => emailInvitation.inserted)
       .map((invitation: bulkInvitationInsertResponse) => {
@@ -425,7 +428,7 @@ export const sendbulkInvitation = async (
           subject: "You were invited to pivot!"
         };
 
-        if (role === "admin") {
+        if (role === InvitationRoles.ADMIN) {
           emailBody.subject = `${userName} sent you a admin invitation to join pivot!`;
         } else {
           emailBody.subject = `${userName} has invited you to join pivot!`;
@@ -440,7 +443,7 @@ export const sendbulkInvitation = async (
           body: emailBody,
           // things that will to be included in the email template
           templateVariables: {
-            is_professor: role === "professor",
+            is_professor: role === InvitationRoles.PROFESSOR,
 
             sender_user_name: userName,
             sender_email: userAccount.email,
@@ -523,7 +526,7 @@ export const sendInvitation = async (
       );
     }
 
-    if (userAccount.role === "student") {
+    if (userAccount.role === InvitationRoles.STUDENT) {
       throw ErrorResponse(
         InvitationError.INVITATION_PREMISSION_EXCEPTION,
         "You do not have premission to send invitations for other users to join your school",
@@ -531,8 +534,8 @@ export const sendInvitation = async (
       );
     }
 
-    if (userAccount.role !== "admin") {
-      if (role === "admin") {
+    if (userAccount.role !== InvitationRoles.ADMIN) {
+      if (role === InvitationRoles.ADMIN) {
         throw ErrorResponse(
           InvitationError.INVITATION_PREMISSION_EXCEPTION,
           "You do not have premission can not send a admin invitation",
@@ -606,7 +609,7 @@ export const deleteInvitation = async (
     }
 
     // if the user is a admin of the school they can delete the invitation as well
-    if (userAccount.role === "admin") {
+    if (userAccount.role === InvitationRoles.ADMIN) {
       await invitationModel.deleteOne({
         email: {
           $options: "i",
@@ -662,8 +665,11 @@ export const updateInvitation = async (
       throw new Error("Internal error, user account not found");
     }
 
-    if (userAccount.role !== "admin" && newRole === "admin") {
-      newRole = "student";
+    if (
+      userAccount.role !== InvitationRoles.ADMIN &&
+      newRole === InvitationRoles.ADMIN
+    ) {
+      newRole = InvitationRoles.STUDENT;
     }
 
     const invitation = await invitationModel.findOne({
@@ -740,7 +746,7 @@ export const sendbulkAdminInvitations = async (
     const bulkInsertedInvitations = await writebulkInvitation(
       APP_NAME,
       emails,
-      "admin",
+      InvitationRoles.ADMIN,
       registeredSchool.id
     );
 

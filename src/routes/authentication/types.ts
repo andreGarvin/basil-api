@@ -13,14 +13,20 @@ export interface UserAccount {
   deactivated: boolean;
   description?: string;
   last_login_at?: string;
-  temporary_reset_password_token?: string;
 }
 
-export interface newUserInfo {
+export interface AccountCredentials {
+  role: string;
+  token: string;
+  user_id: string;
+  school_id: string;
+}
+
+export interface NewUserInfo {
   role: string;
   email: string;
   password: string;
   last_name: string;
-  school_id: string;
   first_name: string;
+  school_name: string;
 }

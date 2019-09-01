@@ -2,30 +2,105 @@ import * as crypto from "crypto";
 
 import * as jwt from "jsonwebtoken";
 import * as bcrypt from "bcryptjs";
+import * as dateFn from "date-fns";
 import * as uuid from "uuid/v4";
 import * as faker from "faker";
 
 // models
 import invitationModel from "../routes/invitation/model";
+import userModel from "../routes/authentication/model";
 import registryModel from "../routes/registry/model";
-import userModel from "../routes/user/model";
+
+// config
+import { TOKEN_SECRET, USER_TOKEN_EXPIRATION } from "../config";
 
 // types
-import { UserAccount, newUserInfo } from "../routes/authentication/types";
+import { UserAccount } from "../routes/authentication/types";
 import { RegistratedSchool } from "../routes/registry/types";
 import { Invitation } from "../routes/invitation/types";
 
 // utils
 import logger from "../common/logger";
+import { boolean } from "joi";
+
+export interface MockUserInfo {
+  school_name: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  email: string;
+  role: string;
+}
+
+// mock data functions
+export const createMockUserInfo = (
+  schoolName: string,
+  domain: string,
+  role?: string
+): MockUserInfo => {
+  const firstName = faker.name.firstName();
+  const lastName = faker.name.lastName();
+
+  return {
+    email: faker.internet.email(firstName, lastName, domain.slice(1)),
+    password: faker.internet.password(),
+    school_name: schoolName || uuid(),
+    role: role || "student",
+    first_name: firstName,
+    last_name: lastName
+  };
+};
+
+export const createMockSchoolInfo = (): { name: string; domain: string } => {
+  const [name] = faker.company.companyName(0);
+
+  return {
+    name: name.toLowerCase(),
+    domain: `@${faker.internet.domainName()}`
+  };
+};
+
+export const generateUserEmails = (domain: string, count: number): string[] => {
+  const emails: string[] = [];
+  for (let i = 0; i < count; i++) {
+    emails.push(
+      faker.internet.email(
+        faker.name.firstName(),
+        faker.name.lastName(),
+        domain.slice(1)
+      )
+    );
+  }
+
+  return emails;
+};
+
+export const generateRandomUserEmails = (count: number): string[] => {
+  const randomDomain = faker.internet.domainName();
+
+  const emails: string[] = [];
+  for (let i = 0; i < count; i++) {
+    emails.push(
+      faker.internet.email(
+        faker.name.firstName(),
+        faker.name.lastName(),
+        randomDomain
+      )
+    );
+  }
+
+  return emails;
+};
 
 // insert
 export const createSchool = async (): Promise<RegistratedSchool> => {
   try {
-    const [name] = faker.company.companyName(0).split(" ");
+    const [name] = faker.company.companyName(0);
+    const domain = faker.internet.domainName();
 
     const newSchool = new registryModel({
-      name: name.toLowerCase(),
-      domain: `@${name.toLowerCase()}.edu`
+      domain: `@${domain}`,
+      name: name.toLowerCase()
     });
 
     await newSchool.save();
@@ -42,52 +117,110 @@ export const createSchool = async (): Promise<RegistratedSchool> => {
   }
 };
 
-export const createUser = async (userInfo: {
-  role: string;
-  school_id: string;
-}): Promise<UserAccount> => {
+export const createInvitation = async (email, role, schoolId) => {
   try {
-    const schooInfo = await registryModel.findOne({ id: userInfo.school_id });
+    const newInvitation = new invitationModel({
+      email,
+      type: role,
+      school_id: schoolId,
+      from: process.env.APP_NAME,
+      expires_at: dateFn.addDays(new Date(), 7).toISOString()
+    });
 
-    const lastName = faker.name.lastName();
-    const firstName = faker.name.firstName();
-    const email = faker.internet.email(
-      firstName,
-      lastName,
-      schooInfo.domain.slice(1)
-    );
+    await newInvitation.save();
+
+    return newInvitation.toJSON();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into invitation collection"
+      );
+
+    throw err;
+  }
+};
+
+interface UserAccountInfo {
+  role: string;
+  email?: string;
+  password?: string;
+  school_id: string;
+  verified?: boolean;
+  last_name?: string;
+  first_name?: string;
+  deactivated?: boolean;
+}
+export const createUser = async (
+  userInfo: UserAccountInfo
+): Promise<UserAccount> => {
+  try {
+    let {
+      role,
+      email,
+      password,
+      school_id,
+      last_name,
+      first_name,
+      deactivated,
+      verified = true
+    } = userInfo;
+
+    const schooInfo = await registryModel.findOne({ id: school_id });
+
+    if (!last_name) {
+      last_name = faker.name.lastName();
+    }
+
+    if (!first_name) {
+      first_name = faker.name.firstName();
+    }
+
+    if (!email) {
+      email = faker.internet.email(
+        first_name,
+        last_name,
+        schooInfo.domain.slice(1)
+      );
+    }
+
+    if (!password) {
+      password = faker.internet.password();
+    }
 
     const md5Hash: string = crypto
       .createHash("md5")
       .update(email)
       .digest("hex");
 
+    // generating a random user id
     const userId: string = uuid(process.env.HOST, uuid.URL);
 
     // creating the user token
     const token: string = jwt.sign(
       {
         user_id: userId,
-        school_id: userInfo.school_id
+        school_id: school_id
       },
-      process.env.JSON_WEB_TOKEN_SECERT,
+      TOKEN_SECRET,
       {
         algorithm: "HS256",
-        expiresIn: "365 days"
+        expiresIn: USER_TOKEN_EXPIRATION
       }
     );
 
     const newUser = new userModel({
-      ...userInfo,
+      role,
       email,
-      // generating a random user id
+      verified,
+      last_name,
+      school_id,
       id: userId,
+      first_name,
+      deactivated,
       token: token,
-      verified: true,
-      last_name: lastName,
-      first_name: firstName,
       // generating a hashed password
-      hash: bcrypt.hashSync(faker.internet.password(), 9),
+      hash: bcrypt.hashSync(password, 9),
       photo_url: `https://www.gravatar.com/avatar/${md5Hash}?d=identicon`
     });
 
@@ -232,7 +365,6 @@ interface UpdateUserInfo {
   deactivated?: boolean;
   description?: string;
   last_login_at?: string;
-  temporary_reset_password_token?: string;
 }
 
 export const updateUserInfo = async (

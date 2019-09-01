@@ -31,8 +31,4 @@ const authenticationMiddleware = (
   });
 };
 
-export default [
-  // basicAuthenticationMiddleware,
-  tokenAuthenticationMiddleware,
-  authenticationMiddleware
-];
+export default [tokenAuthenticationMiddleware, authenticationMiddleware];

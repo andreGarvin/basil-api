@@ -29,9 +29,11 @@ router.post("/register", apiAuthenticationMiddleware, (req, res, next) => {
     abortEarly: false
   });
   if (error) {
-    ValidationJsonResponse.context.errors = validationResponse(error.details);
-
-    return res.status(400).json(ValidationJsonResponse);
+    return res
+      .status(400)
+      .json(
+        ValidationJsonResponse({ errors: validationResponse(error.details) })
+      );
   }
 
   const { name, domain = "" } = req.body;
@@ -49,9 +51,11 @@ router.post(
       abortEarly: false
     });
     if (error) {
-      ValidationJsonResponse.context.errors = validationResponse(error.details);
-
-      return res.status(400).json(ValidationJsonResponse);
+      return res
+        .status(400)
+        .json(
+          ValidationJsonResponse({ errors: validationResponse(error.details) })
+        );
     }
 
     return invitation
@@ -77,9 +81,11 @@ router.get("/search", (req, res, next) => {
 
   const { error } = joi.validate(body, registrySearchParams);
   if (error) {
-    ValidationJsonResponse.context.errors = validationResponse(error.details);
-
-    return res.status(400).json(ValidationJsonResponse);
+    return res
+      .status(400)
+      .json(
+        ValidationJsonResponse({ errors: validationResponse(error.details) })
+      );
   }
 
   return registry

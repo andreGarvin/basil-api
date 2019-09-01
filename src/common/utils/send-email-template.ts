@@ -41,21 +41,19 @@ handlebars.registerHelper("Badge", (name: string) => {
 const TEMPLATES_PATH = resolve(__dirname, "..", "..", "..", "templates");
 
 export enum TEMPLATES {
-  // workspace email templates
-  NEW_WOKRSPACE = "workspace/new-workspace-created",
-  WORKSPACE_INVITATION = "workspace/workspace-invite",
-
-  // authentication email templates
-  RESET_PASSWORD = "authentication/password-reset",
-  ACCOUNT_VERIFICATION = "authentication/account-verification",
-  PASSWORD_UPDATE = "authentication/password-update",
-
   // invitaton email templates
   INVITATON = "invitation/invitation",
   ADMIN_INVITATION = "invitation/admin-invitation",
 
-  // registry  email templates
-  NEW_SCHOOL_REGISTRED = "registry/new-school-registred"
+  // authentication email templates
+  ACCOUNT_PASSWORD_RESET = "authentication/password-reset",
+  ACCOUNT_PASSWORD_UPDATE = "authentication/password-update",
+  ACCOUNT_REACTIVATION = "authentication/account-reactivation",
+  ACCOUNT_VERIFICATION = "authentication/account-verification",
+
+  // workspace email templates
+  NEW_WOKRSPACE = "workspace/new-workspace-created",
+  WORKSPACE_INVITATION = "workspace/workspace-invite"
 }
 
 interface EmailBody extends MailData {

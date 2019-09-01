@@ -32,6 +32,12 @@ const registrySchema = new Schema({
     type: String
   },
 
+  // the schools image/photo
+  photo_url: {
+    default: "",
+    type: String
+  },
+
   /* the email domain of the school
 
     This resticts admins and professors from inviting users to the
@@ -58,4 +64,4 @@ const registrySchema = new Schema({
   }
 });
 
-export default model<RegistratedSchoolModel>("registries", registrySchema);
+export default model<RegistratedSchoolModel>("p_registry", registrySchema);

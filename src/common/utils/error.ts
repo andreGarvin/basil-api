@@ -10,8 +10,8 @@ export default function ErrorConstructor(
   context?: { [key: string]: any }
 ): ServiceError {
   return {
-    context,
     message: message,
-    error_code: errorCode
+    error_code: errorCode,
+    context: context || {}
   };
 }

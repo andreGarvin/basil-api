@@ -23,7 +23,7 @@ router.post("/authenticate", (req, res, next) => {
   // validating the token provided
   const { error } = joi.validate(USER_TOKEN, joi.string().required());
   if (error) {
-    return res.status(400).json(ValidationJsonResponse);
+    return res.status(400).json(ValidationJsonResponse());
   }
 
   // checking the token authentication type

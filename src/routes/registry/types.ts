@@ -9,7 +9,6 @@ export interface RegistratedSchool {
 }
 
 export interface RegisteredSchoolInfo {
-  id: string;
   name: string;
-  domain?: string;
+  photo_url?: string;
 }

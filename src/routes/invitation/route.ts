@@ -44,9 +44,11 @@ router.put("/update", middlewarePipeline, (req, res, next) => {
     abortEarly: false
   });
   if (error) {
-    ValidationJsonResponse.context.errors = validationResponse(error.details);
-
-    return res.status(400).json(ValidationJsonResponse);
+    return res
+      .status(400)
+      .json(
+        ValidationJsonResponse({ errors: validationResponse(error.details) })
+      );
   }
 
   const { email, type } = req.body;
@@ -63,9 +65,11 @@ router.post("/send/bulk", middlewarePipeline, (req, res, next) => {
     abortEarly: false
   });
   if (error) {
-    ValidationJsonResponse.context.errors = validationResponse(error.details);
-
-    return res.status(400).json(ValidationJsonResponse);
+    return res
+      .status(400)
+      .json(
+        ValidationJsonResponse({ errors: validationResponse(error.details) })
+      );
   }
 
   return invitation
@@ -87,14 +91,22 @@ router.post("/send", middlewarePipeline, (req, res, next) => {
     abortEarly: false
   });
   if (error) {
-    ValidationJsonResponse.context.errors = validationResponse(error.details);
-
-    return res.status(400).json(ValidationJsonResponse);
+    return res
+      .status(400)
+      .json(
+        ValidationJsonResponse({ errors: validationResponse(error.details) })
+      );
   }
 
   return invitation
     .sendInvitation(req.state.user, req.body.email, req.body.type)
-    .then(invitation => res.status(200).json(invitation))
+    .then(invitation => {
+      if (process.env.NODE_ENV === "test") {
+        res.status(200).json(invitation);
+      }
+
+      return res.status.json({ sent: true });
+    })
     .catch(next);
 });
 
@@ -134,8 +146,6 @@ router.get("/open/:invite_id", (req, res, next) => {
     if (err instanceof Error) {
       logger.child({ error: err }).error("Failed to redirect user to /signup");
     }
-
-    console.log(err);
 
     return next(err);
   }

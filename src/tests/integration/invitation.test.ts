@@ -3,36 +3,36 @@ import { URL } from "url";
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { test } from "ava";
+import ava, { TestInterface } from "ava";
 import * as request from "supertest";
 import * as faker from "faker";
 
-// interface Context {
-//   school: {
-//     id?: string;
-//   };
-//   user: {
-//     id: string;
-//     role: string;
-//     email: string;
-//     token: string;
-//   };
-//   invitation: {
-//     send: {
-//       type: string;
-//       email: string;
-//     };
-//     bulk: {
-//       type: string;
-//       emails: string[];
-//     };
-//     update: {
-//       type: string;
-//       email: string;
-//     };
-//   };
-// }
-// const test = ava as TestInterface<Context>;
+interface Context {
+  school: {
+    id?: string;
+  };
+  user: {
+    id: string;
+    role: string;
+    email: string;
+    token: string;
+  };
+  invitation: {
+    send: {
+      type: string;
+      email: string;
+    };
+    bulk: {
+      type: string;
+      emails: string[];
+    };
+    update: {
+      type: string;
+      email: string;
+    };
+  };
+}
+const test = ava as TestInterface<Context>;
 
 // invitation error codes
 import AuthenticationError from "../../routes/authentication/error-codes";
@@ -43,6 +43,7 @@ import * as db from "../helper";
 
 // config
 import { ValidationJsonResponse, WEB_APP_HOST } from "../../config";
+const validationJsonResponse = ValidationJsonResponse();
 
 import app from "../../index";
 
@@ -68,11 +69,7 @@ test.beforeEach(async t => {
     email: newUser.email
   };
 
-  const testEmail = faker.internet.email(
-    faker.name.firstName(),
-    faker.name.lastName(),
-    generatedSchool.domain.slice(1)
-  );
+  const [testEmail] = db.generateUserEmails(generatedSchool.domain, 1);
   // the invitation being sent to the backend
   t.context.invitation = {
     send: {
@@ -86,23 +83,7 @@ test.beforeEach(async t => {
     },
     bulk: {
       type: "student",
-      emails: [
-        faker.internet.email(
-          faker.name.firstName(),
-          faker.name.lastName(),
-          generatedSchool.domain.slice(1)
-        ),
-        faker.internet.email(
-          faker.name.firstName(),
-          faker.name.lastName(),
-          generatedSchool.domain.slice(1)
-        ),
-        faker.internet.email(
-          faker.name.firstName(),
-          faker.name.lastName(),
-          generatedSchool.domain.slice(1)
-        )
-      ]
+      emails: db.generateUserEmails(generatedSchool.domain, 3)
     }
   };
 });
@@ -120,6 +101,8 @@ test("/api/invitation/send", async t => {
     .post("/api/invitation/send")
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 200, "Should have status code of 200");
 
@@ -160,6 +143,8 @@ test("/api/invitation/send (not sending required data)", async t => {
     .send({ type: "foobarbaz" })
     .set("x-token", `Bearer ${t.context.user.token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(
     response.status,
     400,
@@ -169,8 +154,8 @@ test("/api/invitation/send (not sending required data)", async t => {
   t.deepEqual(
     response.body,
     {
-      error_code: ValidationJsonResponse.error_code,
-      message: ValidationJsonResponse.message,
+      error_code: validationJsonResponse.error_code,
+      message: validationJsonResponse.message,
       context: {
         errors: [
           {
@@ -205,6 +190,8 @@ test("/api/invitation/send (creating a invite that does not match the school dom
     })
     .set("x-token", `Bearer ${t.context.user.token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 400, "Should return a status code of 400");
 
   t.is(response.body.error_code, InvitationError.DOMAIN_EXCEPTION);
@@ -224,6 +211,8 @@ test("/api/invitation/send (a user with a student role sending a invitation)", a
       email: "john.doe@gmail.com"
     })
     .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 401, "Should return a status code of 401");
 
@@ -248,6 +237,8 @@ test("/api/invitation/send (account that a non admin role sending a admin invita
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(
     response.status,
     401,
@@ -271,6 +262,8 @@ test("/api/invitation/send (sending a email in school with no domain restriction
     200,
     "Should return a sucessful response for saving and send the invitation"
   );
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   const invitation = await db.findInvitationById(response.body.id);
 
@@ -301,6 +294,8 @@ test("/api/invitation/send (sending a invitation but the school does not exist)"
     .send(t.context.invitation.send)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 500, "Should return status code 500");
 });
 
@@ -318,6 +313,8 @@ test("/api/invitation/send (sending a invitation but the user aleady has a accou
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 400, "Should return status code 400");
 
   t.is(
@@ -333,12 +330,16 @@ test("/api/invitation/send (sending a invitation but one was already sent)", asy
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "Should return status code 200");
 
   const responseTwo = await request(app)
     .post("/api/invitation/send")
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(responseTwo.status, 400, "Should return status code 400");
 
@@ -362,6 +363,8 @@ test("/api/invitation/send (sending a invitation but not providing the type of i
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "Should return status code 200");
 
   const invitation = await db.findInvitationById(response.body.id);
@@ -381,9 +384,11 @@ test("/api/invitation/send (sending a invitation but providing a invalid type of
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 400, "Should return 400");
 
-  t.is(response.body.error_code, ValidationJsonResponse.error_code);
+  t.is(response.body.error_code, validationJsonResponse.error_code);
 });
 
 test("/api/invitation/open/:invite_id", async t => {
@@ -391,6 +396,8 @@ test("/api/invitation/open/:invite_id", async t => {
     .post("/api/invitation/send")
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(
     response.status,
@@ -403,6 +410,8 @@ test("/api/invitation/open/:invite_id", async t => {
   const responseTwo = await request(app).get(
     `/api/invitation/open/${invitation.id}`
   );
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(
     responseTwo.status,
@@ -431,6 +440,8 @@ test("/api/invitation/open/:invite_id (providing bullshit invite id)", async t =
     "/api/invitation/open/nsdinflknvbjnidsnfdsbk"
   );
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 302);
 
   t.is(response.header.location, url.href);
@@ -439,11 +450,15 @@ test("/api/invitation/open/:invite_id (providing bullshit invite id)", async t =
     "/api/invitation/open/THIS_IS_SOME_BULL_SHIT"
   );
 
+  t.log(JSON.stringify(responseTwo.body, null, 4));
+
   t.is(responseTwo.status, 302);
 
   t.is(responseTwo.header.location, url.href);
 
   const responseThree = await request(app).get("/api/invitation/open/hey:yes");
+
+  t.log(JSON.stringify(responseThree.body, null, 4));
 
   t.is(responseThree.status, 302);
 
@@ -456,6 +471,8 @@ test("/api/invitation/update", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200);
 
   const invitation = await db.findInvitationByEmail(
@@ -466,6 +483,8 @@ test("/api/invitation/update", async t => {
     .put("/api/invitation/update")
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.update);
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(responseTwo.status, 200);
 
@@ -490,6 +509,8 @@ test("/api/invitation/update (sending invlalid data)", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200);
 
   // changing the 'type' field
@@ -500,9 +521,11 @@ test("/api/invitation/update (sending invlalid data)", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.update);
 
+  t.log(JSON.stringify(responseTwo.body, null, 4));
+
   t.is(responseTwo.status, 400);
 
-  t.is(responseTwo.body.error_code, ValidationJsonResponse.error_code);
+  t.is(responseTwo.body.error_code, validationJsonResponse.error_code);
 
   t.deepEqual(responseTwo.body.context.errors, [
     {
@@ -518,6 +541,8 @@ test("/api/invitation/update (updating a invitation that does not exist)", async
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200);
 
   t.context.invitation.update.email = "john.doe@gmail.com";
@@ -526,6 +551,8 @@ test("/api/invitation/update (updating a invitation that does not exist)", async
     .put("/api/invitation/update")
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.update);
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(responseTwo.status, 404);
 
@@ -541,11 +568,15 @@ test("/api/invitation/delete/:id", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200);
 
   const responseTwo = await request(app)
     .delete(`/api/invitation/delete/${t.context.invitation.send.email}`)
     .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status of 200");
 
@@ -558,6 +589,8 @@ test("/api/invitation/delete/:id (sending a request to delete a invitation that 
   const response = await request(app)
     .delete(`/api/invitation/delete/fake-id`)
     .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 200, "should return a status of 200");
 });
@@ -573,11 +606,15 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by t
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "Should have status code of 200");
 
   const responseTwo = await request(app)
     .delete(`/api/invitation/delete/${t.context.invitation.send.email}`)
     .set("x-token", `Bearer ${otherUserAccount.token}`);
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status of 200");
 
@@ -597,11 +634,15 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by u
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "Should have status code of 200");
 
   const responseTwo = await request(app)
     .delete(`/api/invitation/delete/${t.context.invitation.send.email}`)
     .set("x-token", `Bearer ${otherAdminAccount.token}`);
+
+  t.log(JSON.stringify(responseTwo.body, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status of 200");
 
@@ -616,6 +657,8 @@ test("/api/invitation/send/bulk", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.bulk);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "should return a 200");
 
   const expectedResponse = t.context.invitation.bulk.emails.map(email => {
@@ -626,19 +669,7 @@ test("/api/invitation/send/bulk", async t => {
 });
 
 test("/api/invitation/send/bulk (sending a invitations that does not match the school domain)", async t => {
-  const randomDomain = faker.internet.domainName();
-  const blockedEmails = [
-    faker.internet.email(
-      faker.name.firstName(),
-      faker.name.lastName(),
-      randomDomain
-    ),
-    faker.internet.email(
-      faker.name.firstName(),
-      faker.name.lastName(),
-      randomDomain
-    )
-  ];
+  const blockedEmails = db.generateRandomUserEmails(2);
 
   t.context.invitation.bulk.emails.push(...blockedEmails);
 
@@ -647,10 +678,12 @@ test("/api/invitation/send/bulk (sending a invitations that does not match the s
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.bulk);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "should be a status code");
 
   const expectedResponse = t.context.invitation.bulk.emails.map(email => {
-    const notInserted = email.endsWith(randomDomain);
+    const notInserted = blockedEmails.includes(email);
     if (notInserted) {
       return {
         email,
@@ -677,9 +710,11 @@ test("/api/invitation/send/bulk (sending a invitation with invalid emails)", asy
       type: "stud"
     });
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 400, "should be a 400 status code");
 
-  t.is(response.body.error_code, ValidationJsonResponse.error_code);
+  t.is(response.body.error_code, validationJsonResponse.error_code);
 });
 
 test("/api/invitation/send/bulk (sending a batch of duplicate invites)", async t => {
@@ -693,6 +728,8 @@ test("/api/invitation/send/bulk (sending a batch of duplicate invites)", async t
       ],
       type: "student"
     });
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 200, "should be a 200 status code");
 

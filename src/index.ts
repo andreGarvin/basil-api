@@ -16,20 +16,20 @@ export default server;
 // DRM for mongodb
 import * as mongoose from "mongoose";
 
-// express middleware for headers
-import * as helmet from "helmet";
-
 // JSON request data parser
 import * as bodyParser from "body-parser";
-
+// express middleware for headers
+import * as helmet from "helmet";
 // cross origin middleware
 import * as cors from "cors";
+
+// logger util
+import logger from "./common/logger";
 
 // api routes
 import routes from "./routes";
 
-// logger util
-import logger from "./common/logger";
+// config
 import { MONGO_URI, ORIGIN_WHITE_LIST, PORT } from "./config";
 
 // this checks if the server has all environment variables needed
@@ -42,6 +42,9 @@ if (process.env.NODE_ENV !== "test") {
     "GIPHY_API_KEY",
     "SENDGRID_API_KEY",
     "AWS_ACCESS_KEY_ID",
+    "AWS_ACCESS_KEY_ID",
+    "TEMP_TOKEN_EXPIRATION",
+    "USER_TOKEN_EXPIRATION",
     "JSON_WEB_TOKEN_SECERT",
     "AWS_SECERT_ACCESS_KEY"
   ];

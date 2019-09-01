@@ -1,14 +1,14 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { test } from "ava";
+import ava, { TestInterface } from "ava";
 import * as request from "supertest";
 import * as jwt from "jsonwebtoken";
 
-// const test = ava as TestInterface<{
-//   school: { id: string };
-//   user: { id: string; token: string };
-// }>;
+const test = ava as TestInterface<{
+  school: { id: string };
+  user: { id: string; token: string };
+}>;
 
 // database helper functions
 import * as db from "../helper";
@@ -16,9 +16,8 @@ import * as db from "../helper";
 // error codes
 import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
-import { VALIDATION_EXCEPTION } from "../../common/error-codes";
 
-import app from "../../..";
+import app from "../../index";
 
 test.beforeEach(async t => {
   const generatedSchool = await db.createSchool();
@@ -48,6 +47,8 @@ test("/auth/token/authenicate", async t => {
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 200, "Should be status code of 200");
 
   t.deepEqual(response.body, {
@@ -60,6 +61,8 @@ test("/auth/token/authenicate (providing a invalid token)", async t => {
   const response = await request(app)
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer sajfjkdsajkdhjakshk`);
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 400, "Should be status code of 400");
 
@@ -86,6 +89,8 @@ test("/auth/token/authenicate (providing a expired token)", async t => {
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer ${exipredToken}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 400, "Should be status code of 200");
 
   t.deepEqual(response.body, {
@@ -109,6 +114,8 @@ test("/auth/token/authenicate (providing a token with no existing account)", asy
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer ${token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 404, "Should be status code of 404");
 
   t.deepEqual(response.body, {
@@ -122,6 +129,8 @@ test("/auth/token/refresh", async t => {
   const response = await request(app)
     .put("/auth/token/refresh")
     .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 200, "should return a status of 200");
 
@@ -143,6 +152,8 @@ test("/auth/token/refresh (refresh a token for a account that is deactivated)", 
     .put("/auth/token/refresh")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 401, "should return a status of 401");
 
   t.is(
@@ -158,6 +169,8 @@ test("/auth/token/refresh (refresh a token for a account that is not verified)",
     .put("/auth/token/refresh")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 401, "should return a status of 401");
 
   t.is(
@@ -172,9 +185,14 @@ test("/auth/token/refresh (not sending a token)", async t => {
     .put("/auth/token/refresh")
     .set("x-token", "");
 
+  t.log(JSON.stringify(response.body, null, 4));
+
   t.is(response.status, 400, "should return a status of 401");
 
-  t.is(response.body.error_code, VALIDATION_EXCEPTION);
+  t.is(
+    response.body.error_code,
+    AuthenticationError.INVALID_AUTHORIZATION_TYPE_EXCEPTION
+  );
 });
 
 test("/auth/token/refresh (sending a invalid token)", async t => {
@@ -191,6 +209,8 @@ test("/auth/token/refresh (sending the wrong authorization type)", async t => {
   const response = await request(app)
     .put("/auth/token/refresh")
     .set("x-token", "Bear dasdsadsadsadsaddasd");
+
+  t.log(JSON.stringify(response.body, null, 4));
 
   t.is(response.status, 400, "should return a status of 400");
 

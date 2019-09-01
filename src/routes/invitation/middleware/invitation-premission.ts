@@ -1,5 +1,5 @@
 // models
-import userModel from "../../user/model";
+import userModel from "../../authentication/model";
 
 // error codes
 import InvitationError from "../error-codes";

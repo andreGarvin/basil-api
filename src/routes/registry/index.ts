@@ -113,6 +113,7 @@ export async function searchRegistry(
         },
         {
           $project: {
+            id: 0,
             _id: 0,
             __v: 0,
             domain: 0,

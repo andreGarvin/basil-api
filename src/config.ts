@@ -15,14 +15,18 @@ export const WEB_APP_HOST = process.env.WEB_APP_HOST;
 const ORIGINS = process.env.ORIGINS
   ? process.env.ORIGINS.split(",").filter(host => host.trim())
   : [];
+
 // default origins that are exposed to make cros origin http request
 export const ORIGIN_WHITE_LIST: string[] = [
   ...ORIGINS,
   "http://localhost:8080"
 ];
 
-export const TOKEN_EXPIRATION =
-  parseInt(process.env.TOKEN_EXPIRATION, 10) || 105;
+export const USER_TOKEN_EXPIRATION =
+  process.env.USER_TOKEN_EXPIRATION || "105 days";
+export const TOKEN_SECRET = process.env.JSON_WEB_TOKEN_SECERT;
+export const TEMP_TOKEN_EXPIRATION =
+  process.env.TEMP_TOKEN_EXPIRATION || "24 hours";
 
 // mongo database connection string
 
@@ -35,8 +39,10 @@ export const MONGO_URI: string =
 
 export const NO_REPLY = process.env.NO_REPLY || "Pivot <no-reply@pivotlms.com>";
 
-export const ValidationJsonResponse = ErrorResponse(
-  VALIDATION_EXCEPTION,
-  "There seems to be issue with the information provided",
-  {}
-);
+export const ValidationJsonResponse = (context?: { [key: string]: any }) => {
+  return ErrorResponse(
+    VALIDATION_EXCEPTION,
+    "There seems to be issue with the information provided",
+    context
+  );
+};

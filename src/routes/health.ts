@@ -2,8 +2,8 @@ import * as express from "express";
 
 // models
 import invitationModel from "./invitation/model";
+import userModel from "./authentication/model";
 import registryModel from "./registry/model";
-import userModel from "./user/model";
 
 // utils
 import logger from "../common/logger";

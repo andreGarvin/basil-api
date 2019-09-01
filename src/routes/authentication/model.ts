@@ -1,5 +1,8 @@
 import { Document, Schema, model } from "mongoose";
 
+// module
+import { InvitationRoles } from "../invitation";
+
 // types
 import { UserAccount } from "../authentication/types";
 
@@ -21,7 +24,7 @@ const userSchema = new Schema({
     type: String
   },
 
-  // this is the user's personal jwt token
+  // this is the user jwt token
   token: {
     required: true,
     type: String
@@ -33,15 +36,27 @@ const userSchema = new Schema({
     type: String
   },
 
-  // the user of the user
-  role: {
-    default: "student",
+  // the id of the school the user account is under
+  school_id: {
     required: true,
     type: String
   },
 
-  // fi the user has verified there account
+  // the role of the user in the school
+  role: {
+    default: InvitationRoles.STUDENT,
+    required: true,
+    type: String
+  },
+
+  // the user account being verified
   verified: {
+    default: false,
+    type: Boolean
+  },
+
+  // if the user's account has been deactivated
+  deactivated: {
     default: false,
     type: Boolean
   },
@@ -49,43 +64,31 @@ const userSchema = new Schema({
   // a time stamp of when the user last logged into their account
   last_login_at: Date,
 
-  // The users porfile photo url
+  // The users profile photo url
   photo_url: String,
 
-  // the user's bio description
-  description: String,
-
-  // field to hold temporary reset password token
-  temporary_reset_password_token: String,
-
-  // a time stamp of when the account was created
-  created_at: {
-    default: () => new Date().toISOString(),
-    type: Date
-  },
-
-  // the id of the school the user accoutn is under
-  school_id: {
-    required: true,
-    type: String
-  },
-
-  // The user first name
+  // user first name
   first_name: {
     required: true,
     type: String
   },
 
-  // the user's clast name
+  // user clast name
   last_name: {
     required: true,
     type: String
   },
 
-  // if the user's account has been deactivated
-  deactivated: {
-    default: false,
-    type: Boolean
+  // the user's bio description of the user
+  description: {
+    default: "",
+    type: String
+  },
+
+  // a time stamp when the account was created
+  created_at: {
+    default: () => new Date().toISOString(),
+    type: Date
   }
 });
 

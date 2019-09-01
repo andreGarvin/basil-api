@@ -1,14 +1,14 @@
 import * as jwt from "jsonwebtoken";
 
 // models
-import userModel from "../../user/model";
+import userModel from "../model";
 
 // utils
 import ErrorResponse from "../../../common/utils/error";
 import logger from "../../../common/logger";
 
 // config
-import { TOKEN_EXPIRATION } from "../../../config";
+import { USER_TOKEN_EXPIRATION, TOKEN_SECRET } from "../../../config";
 
 // error codes
 import AuthenticationError from "../error-codes";
@@ -33,7 +33,7 @@ export const authenticate = async (
   try {
     let decoedToken: DecodedToken;
     try {
-      decoedToken = jwt.verify(token, process.env.JSON_WEB_TOKEN_SECERT);
+      decoedToken = jwt.verify(token, TOKEN_SECRET) as DecodedToken;
     } catch (err) {
       if (err.name === "TokenExpiredError") {
         throw ErrorResponse(
@@ -120,10 +120,10 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
         user_id: user.id,
         school_code: user.school_id
       },
-      process.env.JSON_WEB_TOKEN_SECERT,
+      TOKEN_SECRET,
       {
         algorithm: "HS256",
-        expiresIn: `${TOKEN_EXPIRATION} days`
+        expiresIn: USER_TOKEN_EXPIRATION
       }
     );
 

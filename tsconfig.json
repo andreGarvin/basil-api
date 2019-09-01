@@ -5,9 +5,9 @@
     "removeComments": true,
     "noImplicitAny": false,
     "module": "commonjs",
-    "sourceMap": false,
     "rootDir": "./src",
     "target": "esnext",
+    "sourceMap": true,
     "outDir": "build"
   },
   "include": ["src/**/*.ts"]

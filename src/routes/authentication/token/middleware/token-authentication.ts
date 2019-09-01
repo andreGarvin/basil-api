@@ -5,12 +5,14 @@ import * as joi from "joi";
 // modules
 import * as token from "../index";
 
+// config
+import { ValidationJsonResponse } from "../../../../config";
+
 // utils
 import logger from "../../../../common/logger";
 
 // error codes
 import AuthenticationError from "../../error-codes";
-import { ValidationJsonResponse } from "../../../../config";
 
 const tokenAuthenticationMiddlewre = (
   req: express.Request,
@@ -24,7 +26,10 @@ const tokenAuthenticationMiddlewre = (
   if (error) {
     logger.warn(error.message);
 
-    return res.status(400).json(ValidationJsonResponse);
+    return res.status(400).json({
+      message: error.message,
+      error_code: AuthenticationError.INVALID_AUTHORIZATION_TYPE_EXCEPTION
+    });
   }
 
   const [AUTHTYPE, TOKEN]: string[] = USER_TOKEN.split(" ");
@@ -37,7 +42,7 @@ const tokenAuthenticationMiddlewre = (
   }
 
   if (!TOKEN) {
-    return res.status(400).json(ValidationJsonResponse);
+    return res.status(400).json(ValidationJsonResponse());
   }
 
   // if the request is authenticate a token, forward on the request
