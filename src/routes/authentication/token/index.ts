@@ -31,30 +31,7 @@ export const authenticate = async (
   token: string
 ): Promise<TokenAuthenticationResponse> => {
   try {
-    let decoedToken: DecodedToken;
-    try {
-      decoedToken = jwt.verify(token, TOKEN_SECRET) as DecodedToken;
-    } catch (err) {
-      if (err.name === "TokenExpiredError") {
-        throw ErrorResponse(
-          TokenError.EXPIRED_TOKEN_EXCEPTION,
-          "Token has exipred",
-          { http_code: 400 }
-        );
-      }
-
-      if (err.message === "jwt malformed") {
-        throw ErrorResponse(
-          TokenError.INVALID_TOKEN_EXCEPTION,
-          "The token that was provided is invalid",
-          { http_code: 400 }
-        );
-      }
-
-      logger.child({ error: err }).error("Failed to verify token");
-
-      throw err;
-    }
+    const decoedToken = jwt.verify(token, TOKEN_SECRET) as DecodedToken;
 
     // fetching the user account information
     const user: UserAccount = await userModel.findOne({
@@ -90,8 +67,33 @@ export const authenticate = async (
       school_id: decoedToken.school_id
     };
   } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      throw ErrorResponse(
+        TokenError.EXPIRED_TOKEN_EXCEPTION,
+        "Token has exipred",
+        { http_code: 400 }
+      );
+    }
+
+    if (err.message === "jwt malformed") {
+      throw ErrorResponse(
+        TokenError.INVALID_TOKEN_EXCEPTION,
+        "The token that was provided is invalid",
+        { http_code: 400 }
+      );
+    }
+
+    if (err.message === "invalid signature") {
+      logger.error("Token has a invalid signature");
+      throw ErrorResponse(
+        TokenError.INVALID_TOKEN_EXCEPTION,
+        "The token that was provided is invalid",
+        { http_code: 400 }
+      );
+    }
+
     if (err instanceof Error) {
-      logger.child({ error: err }).error("Failed to fetch user token");
+      logger.child({ error: err }).error("Failed to verify user token");
     }
 
     throw err;
@@ -127,7 +129,7 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
       }
     );
 
-    await userModel.updateOne(
+    const status = await userModel.updateOne(
       {
         id: user.id,
         school_id: user.school_id
@@ -136,6 +138,23 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
         $set: { token: refreshedToken }
       }
     );
+
+    if (status.n === 0) {
+      const fields = Object.assign(status, {
+        id: user.id,
+        school_id: user.school_id
+      });
+
+      logger
+        .child(fields)
+        .error(
+          "Internal server error, failed to set the new token to user document"
+        );
+
+      throw new Error(
+        "Internal server error, failed to set the new token to user document"
+      );
+    }
 
     return {
       user_id: user.id,

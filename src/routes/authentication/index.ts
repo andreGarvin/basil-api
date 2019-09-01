@@ -229,7 +229,9 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
         );
       }
     } else {
-      if (userInfo.role !== InvitationRoles.STUDENT) {
+      if (userInfo.role === undefined) {
+        userInfo.role = InvitationRoles.STUDENT;
+      } else if (userInfo.role !== InvitationRoles.STUDENT) {
         throw ErrorResponse(
           AuthenticationError.USER_ROLE_EXCEPTION,
           "The role that was selected was not assigned to your account",
