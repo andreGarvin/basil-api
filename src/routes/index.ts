@@ -4,6 +4,7 @@ const router = express.Router();
 // routes
 import authentication from "./authentication/route";
 import invitation from "./invitation/route";
+import workspace from "./workspace/route";
 import registry from "./registry/route";
 import health from "./health";
 
@@ -31,6 +32,7 @@ router.use(stateMiddlware());
 // routes
 router.use("/auth", authentication);
 router.use("/api/registry", registry);
+router.use("/api/workspace", workspace);
 router.use("/api/invitation", invitation);
 
 // middlware for handling errors and return error responses

@@ -34,8 +34,9 @@ import {
 } from "../../config";
 const validationJsonResponse = ValidationJsonResponse();
 
-import app from "../../index";
 import { InvitationRoles } from "../../routes/invitation";
+
+import app from "../../index";
 
 // before each test create user, school and pass the context to the all the test of the user and the school
 test.beforeEach(async t => {

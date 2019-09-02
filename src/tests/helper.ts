@@ -8,20 +8,28 @@ import * as faker from "faker";
 
 // models
 import invitationModel from "../routes/invitation/model";
+import workspaceModel from "../routes/workspace/model";
 import userModel from "../routes/authentication/model";
 import registryModel from "../routes/registry/model";
 
+// module
+import { WorkspaceTypes, WorkspaceScopes } from "../routes/workspace";
+
 // config
-import { TOKEN_SECRET, USER_TOKEN_EXPIRATION } from "../config";
+import {
+  TOKEN_SECRET,
+  CHARACTER_LIMIT,
+  USER_TOKEN_EXPIRATION
+} from "../config";
 
 // types
 import { UserAccount } from "../routes/authentication/types";
 import { RegistratedSchool } from "../routes/registry/types";
 import { Invitation } from "../routes/invitation/types";
+import { Workspace } from "../routes/workspace/types";
 
 // utils
 import logger from "../common/logger";
-import { boolean } from "joi";
 
 export interface MockUserInfo {
   school_name: string;
@@ -57,6 +65,22 @@ export const createMockSchoolInfo = (): { name: string; domain: string } => {
   return {
     name: name.toLowerCase(),
     domain: `@${faker.internet.domainName()}`
+  };
+};
+
+export const createMockWorkspaceInfo = (): NewWorkspaceInfo => {
+  const [name] = faker.company.companyName(0);
+  const section = uuid().slice(0, 5);
+  const description = faker.lorem
+    .words(CHARACTER_LIMIT)
+    .slice(0, CHARACTER_LIMIT);
+
+  return {
+    description,
+    section: section,
+    name: name.toLowerCase(),
+    type: WorkspaceTypes.class,
+    scope: WorkspaceScopes.private
   };
 };
 
@@ -110,7 +134,7 @@ export const createSchool = async (): Promise<RegistratedSchool> => {
     logger
       .child({ error: err })
       .error(
-        "Test helper function failed insert mock data for into registries collection"
+        "Test helper function failed insert mock data for into p_registry collection"
       );
 
     throw err;
@@ -134,7 +158,46 @@ export const createInvitation = async (email, role, schoolId) => {
     logger
       .child({ error: err })
       .error(
-        "Test helper function failed insert mock data for into invitation collection"
+        "Test helper function failed insert mock data for into invitations collection"
+      );
+
+    throw err;
+  }
+};
+
+interface NewWorkspaceInfo {
+  name: string;
+  type: string;
+  scope: string;
+  section: string;
+  archived?: boolean;
+  description: string;
+}
+export const createWorkspace = async (
+  userId: string,
+  schoolId: string,
+  workspaceInfo: NewWorkspaceInfo
+): Promise<Workspace> => {
+  try {
+    const newInvitation = new workspaceModel({
+      creator: userId,
+      school_id: schoolId,
+      name: workspaceInfo.name,
+      type: workspaceInfo.type,
+      scope: workspaceInfo.scope,
+      section: workspaceInfo.section,
+      archived: workspaceInfo.archived,
+      description: workspaceInfo.description
+    });
+
+    await newInvitation.save();
+
+    return newInvitation.toJSON();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into workspaces collection"
       );
 
     throw err;
@@ -257,6 +320,22 @@ export const findInvitationById = async (
   }
 };
 
+export const findWorkspaceById = async (
+  workspaceId: string
+): Promise<Workspace> => {
+  try {
+    const workspace = await workspaceModel.findOne({ id: workspaceId });
+
+    return workspace ? workspace.toJSON() : workspace;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from workspaces collection"
+      );
+  }
+};
+
 export const findInvitationByEmail = async (
   email: string
 ): Promise<Invitation> => {
@@ -344,7 +423,7 @@ export const findSchoolbyId = async (
     logger
       .child({ error: err })
       .error(
-        "Test helper function failed to return document from registries collection"
+        "Test helper function failed to return document from p_registry collection"
       );
   }
 };
@@ -400,7 +479,7 @@ export const updateSchoolInfo = async (
     logger
       .child({ error: err })
       .error(
-        "Test helper function failed to update document from registries collection"
+        "Test helper function failed to update document from p_registry collection"
       );
 
     throw err;
@@ -436,6 +515,20 @@ export const clearInvitations = async () => {
   }
 };
 
+export const clearWorkspaces = async () => {
+  try {
+    await workspaceModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete all mock data form workspace collection"
+      );
+
+    throw err;
+  }
+};
+
 export const clearRegistry = async () => {
   try {
     await registryModel.deleteMany({});
@@ -443,7 +536,7 @@ export const clearRegistry = async () => {
     logger
       .child({ error: err })
       .error(
-        "Test helper function failed delete all mock data form registries collection"
+        "Test helper function failed delete all mock data form p_registry collection"
       );
 
     throw err;

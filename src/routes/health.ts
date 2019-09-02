@@ -2,6 +2,7 @@ import * as express from "express";
 
 // models
 import invitationModel from "./invitation/model";
+import workspaceModel from "./workspace/model";
 import userModel from "./authentication/model";
 import registryModel from "./registry/model";
 
@@ -17,6 +18,7 @@ const heavyCheck = async (): Promise<void> => {
   try {
     await userModel.find({}).limit(1);
     await registryModel.find({}).limit(1);
+    await workspaceModel.find({}).limit(1);
     await invitationModel.find({}).limit(1);
   } catch (err) {
     logger.child({ error: err }).error("Internal error, A query failed");

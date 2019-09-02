@@ -7,14 +7,17 @@
     "start": "node .",
     "start:dev": "NODE_ENV=dev nodemon .",
     "build": "tsc --project tsconfig.json",
+    "test:integration": "NODE_ENV=test nyc ava",
     "test": "NODE_DEBUG=true NODE_ENV=test nyc ava",
-    "build:watch": "tsc -w --project tsconfig.json",
-    "test:unit": "NODE_ENV=test nyc ava ./build/tests/unit/*.test.js",
-    "test:integration": "NODE_ENV=test nyc ava ./build/tests/integration/*.test.js"
+    "build:watch": "tsc -w --project tsconfig.json"
   },
   "ava": {
     "failFast": true,
-    "serial": true
+    "serial": true,
+    "files": [
+      "build/tests/integration/**/*.test.js",
+      "build/tests/integration/*.test.js"
+    ]
   },
   "author": "Andre Garvin",
   "license": "MIT",
@@ -30,7 +33,6 @@
     "@types/socket.io": "2.1.2",
     "@types/supertest": "2.0.8",
     "aws-sdk": "2.345.0",
-    "axios": "0.19.0",
     "bcryptjs": "2.4.3",
     "body-parser": "1.18.2",
     "chalk": "2.4.2",
