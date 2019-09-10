@@ -7,13 +7,15 @@ import * as uuid from "uuid/v4";
 import * as faker from "faker";
 
 // models
+import workspaceMemberModel from "../routes/workspace/member/model";
 import invitationModel from "../routes/invitation/model";
 import workspaceModel from "../routes/workspace/model";
 import userModel from "../routes/authentication/model";
 import registryModel from "../routes/registry/model";
 
-// module
+// module enums
 import { WorkspaceTypes, WorkspaceScopes } from "../routes/workspace";
+import { InvitationRoles } from "../routes/invitation";
 
 // config
 import {
@@ -23,6 +25,7 @@ import {
 } from "../config";
 
 // types
+import { WorkspaceMember } from "../routes/workspace/member/types";
 import { UserAccount } from "../routes/authentication/types";
 import { RegistratedSchool } from "../routes/registry/types";
 import { Invitation } from "../routes/invitation/types";
@@ -60,7 +63,7 @@ export const createMockUserInfo = (
 };
 
 export const createMockSchoolInfo = (): { name: string; domain: string } => {
-  const [name] = faker.company.companyName(0);
+  const [name] = faker.company.companyName(0).split(" ");
 
   return {
     name: name.toLowerCase(),
@@ -69,7 +72,7 @@ export const createMockSchoolInfo = (): { name: string; domain: string } => {
 };
 
 export const createMockWorkspaceInfo = (): NewWorkspaceInfo => {
-  const [name] = faker.company.companyName(0);
+  const [name] = faker.company.companyName(0).split(" ");
   const section = uuid().slice(0, 5);
   const description = faker.lorem
     .words(CHARACTER_LIMIT)
@@ -119,7 +122,7 @@ export const generateRandomUserEmails = (count: number): string[] => {
 // insert
 export const createSchool = async (): Promise<RegistratedSchool> => {
   try {
-    const [name] = faker.company.companyName(0);
+    const [name] = faker.company.companyName(0).split(" ");
     const domain = faker.internet.domainName();
 
     const newSchool = new registryModel({
@@ -179,7 +182,7 @@ export const createWorkspace = async (
   workspaceInfo: NewWorkspaceInfo
 ): Promise<Workspace> => {
   try {
-    const newInvitation = new workspaceModel({
+    const newWorkspace = new workspaceModel({
       creator: userId,
       school_id: schoolId,
       name: workspaceInfo.name,
@@ -190,9 +193,17 @@ export const createWorkspace = async (
       description: workspaceInfo.description
     });
 
-    await newInvitation.save();
+    await newWorkspace.save();
 
-    return newInvitation.toJSON();
+    const newMember = new workspaceMemberModel({
+      is_admin: true,
+      user_id: userId,
+      workspace_id: newWorkspace.id
+    });
+
+    await newMember.save();
+
+    return newWorkspace.toJSON();
   } catch (err) {
     logger
       .child({ error: err })
@@ -301,6 +312,38 @@ export const createUser = async (
   }
 };
 
+interface NewMemberInfo {
+  removed?: boolean;
+  is_admin?: boolean;
+}
+
+export const createWorkspaceMember = async (
+  userId: string,
+  workspaceId: string,
+  newMemberInfo?: NewMemberInfo
+): Promise<WorkspaceMember> => {
+  try {
+    const newWorkspaceMember = new workspaceMemberModel({
+      user_id: userId,
+      workspace_id: workspaceId,
+      removed: newMemberInfo ? newMemberInfo.removed : false,
+      is_admin: newMemberInfo ? newMemberInfo.is_admin : false
+    });
+
+    await newWorkspaceMember.save();
+
+    return newWorkspaceMember.toJSON();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into workspace_members collection"
+      );
+
+    throw err;
+  }
+};
+
 // find
 export const findInvitationById = async (
   invitationId: string
@@ -376,6 +419,42 @@ export const findUserByEmail = async (email: string): Promise<UserAccount> => {
   }
 };
 
+export const returnWorkspaceMembers = async (
+  workspaceId: string
+): Promise<WorkspaceMember[]> => {
+  try {
+    return await workspaceMemberModel.find({
+      workspace_id: workspaceId
+    });
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from workspace_member collection"
+      );
+  }
+};
+
+export const findWorkspaceMemberByUserId = async (
+  userId: string,
+  workspaceId: string
+): Promise<WorkspaceMember> => {
+  try {
+    const workspaceMember = await workspaceMemberModel.findOne({
+      user_id: userId,
+      workspace_id: workspaceId
+    });
+
+    return workspaceMember ? workspaceMember.toJSON() : workspaceMember;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from workspace_member collection"
+      );
+  }
+};
+
 export const findUserById = async (userId: string): Promise<UserAccount> => {
   try {
     const user = await userModel.findOne({
@@ -396,11 +475,9 @@ export const returnInvitationsBySchoolId = async (
   schoolId: string
 ): Promise<Invitation[]> => {
   try {
-    const invitations = await invitationModel.find({
+    return await invitationModel.find({
       school_id: schoolId
     });
-
-    return invitations;
   } catch (err) {
     logger
       .child({ error: err })
@@ -463,6 +540,68 @@ export const updateUserInfo = async (
   }
 };
 
+export interface UpdateWorkspaceInfo {
+  name?: string;
+  type?: string;
+  scope?: string;
+  creator?: string;
+  section?: string;
+  school_id?: string;
+  archived?: boolean;
+  created_at?: string;
+  description?: string;
+}
+
+export const updateWorkspaceInfo = async (
+  workspaceId: string,
+  workspaceInfo: UpdateWorkspaceInfo
+) => {
+  try {
+    await workspaceModel.updateOne(
+      { id: workspaceId },
+      { $set: workspaceInfo }
+    );
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to update document from workspace collection"
+      );
+
+    throw err;
+  }
+};
+
+interface UpdateWorkspaceMemberInfo {
+  status?: string;
+  removed?: boolean;
+  joined_at?: string;
+  is_admin?: boolean;
+  is_active?: boolean;
+  last_active_at?: string;
+}
+
+export const updateWorkspaceMemberInfo = async (
+  userId: string,
+  workspaceId: string,
+  workspaceMemberInfo: UpdateWorkspaceMemberInfo
+) => {
+  try {
+    await workspaceMemberModel.updateOne(
+      { user_id: userId, workspace_id: workspaceId },
+      { $set: workspaceMemberInfo }
+    );
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to update document from workspace_members collection"
+      );
+
+    throw err;
+  }
+};
+
 interface UpdateSchoolInfo {
   name?: string;
   domain?: string;
@@ -487,6 +626,26 @@ export const updateSchoolInfo = async (
 };
 
 // delete
+export const deleteMemberfromWorkspaceByUserId = async (
+  userId: string,
+  workspaceId: string
+) => {
+  try {
+    await workspaceMemberModel.deleteOne({
+      user_id: userId,
+      workspace_id: workspaceId
+    });
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete invitation mock data form workspace_members collection"
+      );
+
+    throw err;
+  }
+};
+
 export const deleteInvitationById = async (invitationId: string) => {
   try {
     await invitationModel.deleteOne({ id: invitationId });
@@ -537,6 +696,20 @@ export const clearRegistry = async () => {
       .child({ error: err })
       .error(
         "Test helper function failed delete all mock data form p_registry collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearWorkspaceMembers = async () => {
+  try {
+    await workspaceMemberModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete all mock data form workspace_members collection"
       );
 
     throw err;

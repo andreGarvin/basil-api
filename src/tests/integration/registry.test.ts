@@ -42,7 +42,7 @@ test("/api/registry/register", async t => {
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status code of 200");
 
@@ -62,7 +62,7 @@ test("/api/registry/register", async t => {
       deactivated: registeredSchool.deactivated
     },
     {
-      type: undefined,
+      type: "",
       deactivated: false,
       name: t.context.registration.name,
       domain: t.context.registration.domain
@@ -78,7 +78,7 @@ test("/api/registry/register (inserting a school with no domain)", async t => {
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status code of 200");
 
@@ -95,7 +95,7 @@ test("/api/registry/register (trying to register the same school again)", async 
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status code of 200");
 
@@ -112,7 +112,7 @@ test("/api/registry/register (trying to register the same school again)", async 
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 400, "should return a status code of 400");
 
@@ -127,7 +127,7 @@ test("/api/registry/register (trying to register the same school again)", async 
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(responseThree.body, null, 4));
+  t.log(JSON.stringify(responseThree, null, 4));
 
   t.is(
     responseThree.status,
@@ -149,7 +149,7 @@ test("/api/registry/register (trying to register the same school again, but not 
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status code of 200");
 
@@ -166,7 +166,7 @@ test("/api/registry/register (trying to register the same school again, but not 
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 400, "should return a status code of 400");
 
@@ -196,7 +196,7 @@ test("/api/registry/register (sending invalid data)", async t => {
     .set("x-api-key", process.env.API_KEY)
     .send(requestBody);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status code of 400");
 
@@ -223,7 +223,7 @@ test("/api/registry/register (providing a fake api key)", async t => {
     .post("/api/registry/register")
     .set("x-api-key", "ndsjksnklfsdnklfsndlknkl");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401);
 
@@ -231,13 +231,13 @@ test("/api/registry/register (providing a fake api key)", async t => {
     .post("/api/registry/register")
     .set("x-api-key", "FEFEFE");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(responseTwo.status, 401);
 
   const responseThree = await request(app).post("/api/registry/register");
 
-  t.log(JSON.stringify(responseThree.body, null, 4));
+  t.log(JSON.stringify(responseThree, null, 4));
 
   t.is(responseThree.status, 401);
 });
@@ -248,7 +248,7 @@ test("/api/registry/invite/admin/bulk", async t => {
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status code of 200");
 
@@ -260,7 +260,7 @@ test("/api/registry/invite/admin/bulk", async t => {
       emails: t.context.admins
     });
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status code of 200");
 
@@ -300,7 +300,7 @@ test("/api/registry/invite/admin/bulk (sending invalid data)", async t => {
       school_id: 2323
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return a status code of 400");
 
@@ -323,7 +323,7 @@ test("/api/registry/invite/admin/bulk (sending invalid data)", async t => {
       emails: ["some-fake-text"]
     });
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 400, "should return a status code of 400");
 });
@@ -337,7 +337,7 @@ test("/api/registry/invite/admin/bulk (sending a bulk invite for a school, that 
       emails: t.context.admins
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 500, "should return a status code of 500");
 
@@ -356,7 +356,7 @@ test("/api/registry/register (providing a domain, but some of the the admins ema
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status code of 200");
 
@@ -375,7 +375,7 @@ test("/api/registry/register (providing a domain, but some of the the admins ema
       emails: t.context.admins
     });
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status code of 200");
 
@@ -396,26 +396,21 @@ test("/api/registry/search", async t => {
     .set("x-api-key", process.env.API_KEY)
     .send(t.context.registration);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return status of 200");
 
   const responseTwo = await request(app).get("/api/registry/search");
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "should return status of 200");
 
   const school = await db.findSchoolbyId(response.body.school_id);
 
   t.deepEqual(responseTwo.body, {
-    results: [
-      {
-        name: school.name,
-        photo_url: ""
-      }
-    ],
     next_page: -1,
+    results: [],
     search: "",
     limit: 15,
     page: 1
@@ -425,7 +420,7 @@ test("/api/registry/search", async t => {
     "/api/registry/search?search=we"
   );
 
-  t.log(JSON.stringify(responseThree.body, null, 4));
+  t.log(JSON.stringify(responseThree, null, 4));
 
   t.is(responseThree.status, 200, "should return status of 200");
 
@@ -441,7 +436,7 @@ test("/api/registry/search", async t => {
     "/api/registry/search?page=23&limit=hell"
   );
 
-  t.log(JSON.stringify(responseFour.body, null, 4));
+  t.log(JSON.stringify(responseFour, null, 4));
 
   t.is(responseFour.status, 200, "should return status of 200");
 

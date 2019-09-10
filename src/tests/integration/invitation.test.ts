@@ -34,7 +34,7 @@ interface Context {
 }
 const test = ava as TestInterface<Context>;
 
-// invitation error codes
+// error codes
 import AuthenticationError from "../../routes/authentication/error-codes";
 import InvitationError from "../../routes/invitation/error-codes";
 
@@ -46,6 +46,7 @@ import { ValidationJsonResponse, WEB_APP_HOST } from "../../config";
 const validationJsonResponse = ValidationJsonResponse();
 
 import app from "../../index";
+import { InvitationRoles } from "../../routes/invitation";
 
 // before each test create user, school and pass the context to the all the test of the user and the school
 test.beforeEach(async t => {
@@ -58,8 +59,8 @@ test.beforeEach(async t => {
 
   // generated a random user
   const newUser = await db.createUser({
-    school_id: t.context.school.id,
-    role: "admin"
+    role: InvitationRoles.ADMIN,
+    school_id: t.context.school.id
   });
 
   t.context.user = {
@@ -102,7 +103,7 @@ test("/api/invitation/send", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Should have status code of 200");
 
@@ -143,7 +144,7 @@ test("/api/invitation/send (not sending required data)", async t => {
     .send({ type: "foobarbaz" })
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(
     response.status,
@@ -190,7 +191,7 @@ test("/api/invitation/send (creating a invite that does not match the school dom
     })
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should return a status code of 400");
 
@@ -202,7 +203,7 @@ test("/api/invitation/send (creating a invite that does not match the school dom
 });
 
 test("/api/invitation/send (a user with a student role sending a invitation)", async t => {
-  await db.updateUserInfo(t.context.user.id, { role: "student" });
+  await db.updateUserInfo(t.context.user.id, { role: InvitationRoles.STUDENT });
 
   const response = await request(app)
     .post("/api/invitation/send")
@@ -212,7 +213,7 @@ test("/api/invitation/send (a user with a student role sending a invitation)", a
     })
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "Should return a status code of 401");
 
@@ -227,7 +228,9 @@ test("/api/invitation/send (a user with a student role sending a invitation)", a
 });
 
 test("/api/invitation/send (account that a non admin role sending a admin invitation)", async t => {
-  await db.updateUserInfo(t.context.user.id, { role: "professor" });
+  await db.updateUserInfo(t.context.user.id, {
+    role: InvitationRoles.PROFESSOR
+  });
 
   t.context.invitation.send.type = "admin";
 
@@ -237,7 +240,7 @@ test("/api/invitation/send (account that a non admin role sending a admin invita
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(
     response.status,
@@ -263,7 +266,7 @@ test("/api/invitation/send (sending a email in school with no domain restriction
     "Should return a sucessful response for saving and send the invitation"
   );
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   const invitation = await db.findInvitationById(response.body.id);
 
@@ -294,7 +297,7 @@ test("/api/invitation/send (sending a invitation but the school does not exist)"
     .send(t.context.invitation.send)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 500, "Should return status code 500");
 });
@@ -302,8 +305,8 @@ test("/api/invitation/send (sending a invitation but the school does not exist)"
 test("/api/invitation/send (sending a invitation but the user aleady has a account)", async t => {
   // creating a user
   const userAccount = await db.createUser({
-    school_id: t.context.school.id,
-    role: "student"
+    role: InvitationRoles.STUDENT,
+    school_id: t.context.school.id
   });
 
   t.context.invitation.send.email = userAccount.email;
@@ -313,7 +316,7 @@ test("/api/invitation/send (sending a invitation but the user aleady has a accou
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should return status code 400");
 
@@ -330,7 +333,7 @@ test("/api/invitation/send (sending a invitation but one was already sent)", asy
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Should return status code 200");
 
@@ -339,7 +342,7 @@ test("/api/invitation/send (sending a invitation but one was already sent)", asy
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 400, "Should return status code 400");
 
@@ -363,7 +366,7 @@ test("/api/invitation/send (sending a invitation but not providing the type of i
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Should return status code 200");
 
@@ -384,7 +387,7 @@ test("/api/invitation/send (sending a invitation but providing a invalid type of
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should return 400");
 
@@ -397,7 +400,7 @@ test("/api/invitation/open/:invite_id", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(
     response.status,
@@ -411,7 +414,7 @@ test("/api/invitation/open/:invite_id", async t => {
     `/api/invitation/open/${invitation.id}`
   );
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(
     responseTwo.status,
@@ -440,7 +443,7 @@ test("/api/invitation/open/:invite_id (providing bullshit invite id)", async t =
     "/api/invitation/open/nsdinflknvbjnidsnfdsbk"
   );
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 302);
 
@@ -450,7 +453,7 @@ test("/api/invitation/open/:invite_id (providing bullshit invite id)", async t =
     "/api/invitation/open/THIS_IS_SOME_BULL_SHIT"
   );
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 302);
 
@@ -458,7 +461,7 @@ test("/api/invitation/open/:invite_id (providing bullshit invite id)", async t =
 
   const responseThree = await request(app).get("/api/invitation/open/hey:yes");
 
-  t.log(JSON.stringify(responseThree.body, null, 4));
+  t.log(JSON.stringify(responseThree, null, 4));
 
   t.is(responseThree.status, 302);
 
@@ -471,7 +474,7 @@ test("/api/invitation/update", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200);
 
@@ -484,7 +487,7 @@ test("/api/invitation/update", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.update);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200);
 
@@ -509,7 +512,7 @@ test("/api/invitation/update (sending invlalid data)", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200);
 
@@ -521,7 +524,7 @@ test("/api/invitation/update (sending invlalid data)", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.update);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 400);
 
@@ -541,7 +544,7 @@ test("/api/invitation/update (updating a invitation that does not exist)", async
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200);
 
@@ -552,7 +555,7 @@ test("/api/invitation/update (updating a invitation that does not exist)", async
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.update);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 404);
 
@@ -568,7 +571,7 @@ test("/api/invitation/delete/:id", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200);
 
@@ -576,7 +579,7 @@ test("/api/invitation/delete/:id", async t => {
     .delete(`/api/invitation/delete/${t.context.invitation.send.email}`)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status of 200");
 
@@ -590,15 +593,15 @@ test("/api/invitation/delete/:id (sending a request to delete a invitation that 
     .delete(`/api/invitation/delete/fake-id`)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status of 200");
 });
 
 test("/api/invitation/delete/:id (deleteing invitation that was not created by the same user account)", async t => {
   const otherUserAccount = await db.createUser({
-    role: "professor",
-    school_id: t.context.school.id
+    school_id: t.context.school.id,
+    role: InvitationRoles.PROFESSOR
   });
 
   const response = await request(app)
@@ -606,7 +609,7 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by t
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Should have status code of 200");
 
@@ -614,7 +617,7 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by t
     .delete(`/api/invitation/delete/${t.context.invitation.send.email}`)
     .set("x-token", `Bearer ${otherUserAccount.token}`);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status of 200");
 
@@ -625,7 +628,7 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by t
 
 test("/api/invitation/delete/:id (deleteing invitation that was not created by user account as a admin)", async t => {
   const otherAdminAccount = await db.createUser({
-    role: "admin",
+    role: InvitationRoles.ADMIN,
     school_id: t.context.school.id
   });
 
@@ -634,7 +637,7 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by u
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.send);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Should have status code of 200");
 
@@ -642,7 +645,7 @@ test("/api/invitation/delete/:id (deleteing invitation that was not created by u
     .delete(`/api/invitation/delete/${t.context.invitation.send.email}`)
     .set("x-token", `Bearer ${otherAdminAccount.token}`);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "should return a status of 200");
 
@@ -657,7 +660,7 @@ test("/api/invitation/send/bulk", async t => {
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.bulk);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a 200");
 
@@ -678,7 +681,7 @@ test("/api/invitation/send/bulk (sending a invitations that does not match the s
     .set("x-token", `Bearer ${t.context.user.token}`)
     .send(t.context.invitation.bulk);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should be a status code");
 
@@ -710,7 +713,7 @@ test("/api/invitation/send/bulk (sending a invitation with invalid emails)", asy
       type: "stud"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should be a 400 status code");
 
@@ -729,7 +732,7 @@ test("/api/invitation/send/bulk (sending a batch of duplicate invites)", async t
       type: "student"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should be a 200 status code");
 

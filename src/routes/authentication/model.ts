@@ -62,7 +62,10 @@ const userSchema = new Schema({
   },
 
   // a time stamp of when the user last logged into their account
-  last_login_at: Date,
+  last_login_at: {
+    default: null,
+    type: Date
+  },
 
   // The users profile photo url
   photo_url: String,

@@ -6,6 +6,7 @@ import * as bcrypt from "bcryptjs";
 import * as uuid from "uuid/v4";
 
 // models
+import workspaceMemberModel from "../workspace/member/model";
 import invitationModel from "../invitation/model";
 import registryModel from "../registry/model";
 import userModel from "./model";
@@ -60,6 +61,41 @@ const uniquePassword = (
     !error.SPECIAL_CHARACTER;
 
   return bool === false ? error : null;
+};
+
+/**
+ * This method is to used internally, this method handles add the user to all the workspaces
+ * and channels they have been added to
+ */
+const accountSetup = async (
+  userId: string,
+  userEmail: string,
+  schoolId: string
+): Promise<void> => {
+  try {
+    // updating all the documents in workspace_members collection that have the user's email
+    await workspaceMemberModel.updateMany(
+      {
+        user_id: {
+          $options: "i",
+          $regex: userEmail
+        }
+      },
+      {
+        $set: {
+          user_id: userId
+        }
+      }
+    );
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Failed to update the user information in all workspaces under the school"
+      );
+
+    throw err;
+  }
 };
 
 /**
@@ -301,6 +337,8 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
       throw err;
     }
 
+    await accountSetup(newUser.id, newUser.email, school.id);
+
     // deleting all invitations that were sent to the user under the email and school_id
     await invitationModel.deleteMany({
       email: {
@@ -356,7 +394,7 @@ export const verifyAccount = async (
     );
 
     if (status.n === 0) {
-      const fields = Object.assign(status, {
+      const fields = Object.assign({}, status, {
         email: decoedToken.email,
         school_id: decoedToken.school_id
       });
@@ -499,8 +537,8 @@ export const resetPassword = async (
     );
     if (account === null) {
       logger
-        .child({ email: decoedToken.email, schooli_id: decoedToken.school_id })
-        .error("user account was not found");
+        .child({ email: decoedToken.email, school_id: decoedToken.school_id })
+        .warn("user account was not found");
 
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION,

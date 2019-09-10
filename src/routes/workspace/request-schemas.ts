@@ -3,11 +3,22 @@ import * as joi from "joi";
 // config
 import { CHARACTER_LIMIT } from "../../config";
 
+export const workspaceSearchParams = joi.object().keys({
+  page: joi.number().optional(),
+
+  limit: joi.number().optional(),
+
+  search: joi
+    .string()
+    .allow("")
+    .optional()
+});
+
 export const createWorkspaceSchema = joi.object().keys({
   scope: joi
     .string()
     .optional()
-    .regex(/private|public|global/)
+    .regex(/private|public/)
     .error(([err]) => {
       return {
         message: "must provide a valid scope for this workspace",
@@ -112,7 +123,7 @@ export const updateWorkspaceInfoSchema = joi.object().keys({
   scope: joi
     .string()
     .optional()
-    .regex(/private|public|global/)
+    .regex(/private|public/)
     .error(([err]) => {
       return {
         message: "must provide a valid scope for this workspace",

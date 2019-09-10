@@ -24,11 +24,13 @@ const tokenAuthenticationMiddlewre = (
 
   const { error } = joi.validate(USER_TOKEN, joi.string().required());
   if (error) {
-    logger.warn(error.message);
+    logger
+      .child({ _message: "authentication token not provided" })
+      .debug(error.message);
 
-    return res.status(400).json({
-      message: error.message,
-      error_code: AuthenticationError.INVALID_AUTHORIZATION_TYPE_EXCEPTION
+    return res.status(401).json({
+      message: "authentication token not provided",
+      error_code: AuthenticationError.FAILED_AUTHENTICATION_EXCEPTION
     });
   }
 

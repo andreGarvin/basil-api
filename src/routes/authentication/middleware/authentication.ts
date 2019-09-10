@@ -23,7 +23,7 @@ const authenticationMiddleware = (
     return next();
   }
 
-  logger.debug("state", req.state);
+  logger.child(req.state).debug("state");
 
   return res.status(401).json({
     message: "You are not authenticated",

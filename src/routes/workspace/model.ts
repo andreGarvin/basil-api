@@ -82,11 +82,6 @@ const workspaceSchema = new Schema({
             same school the workspace was created under, however not other schools. Any user
             can send a request to join the workspace and even know of its existence through
             sreaching for workspaces in school
-  
-          * global: This allows a workspace (aka class/club) is be publicly available to all schools
-            on the platform. Any user on the platform can send a request to join the workspace and
-            admins' of the workspace can send a invite to any user on the platform to join the
-            workspace
     */
     default: "private",
     required: true,

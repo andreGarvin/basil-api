@@ -22,11 +22,11 @@ import authenticationMiddleware from "./middleware/authentication";
 
 // request schemas
 import {
-  emailObjectSchema,
-  createAccountSchema,
-  resetPasswordSchema,
+  BasicAuthenticationSchema,
   updatePasswordSchema,
-  BasicAuthenticationSchema
+  resetPasswordSchema,
+  createAccountSchema,
+  emailObjectSchema
 } from "./request-schemas";
 
 const loginUrl = new URL(WEB_APP_HOST);

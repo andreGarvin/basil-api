@@ -6,7 +6,7 @@ import * as request from "supertest";
 import * as jwt from "jsonwebtoken";
 import * as bcrypt from "bcryptjs";
 
-// invitation error codes
+// error codes
 import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
 import RegistryError from "../../routes/registry/error-codes";
@@ -72,7 +72,7 @@ test("/auth/create (account defaults to student)", async t => {
     .post("/auth/create")
     .send(mockUser);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 201, "should return status code of 201");
 
@@ -122,7 +122,7 @@ test("/auth/create (sending invalid data)", async t => {
       email: "myemailissupercool"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -144,7 +144,7 @@ test("/auth/create (creating a admin account)", async t => {
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 201, "should return status code of 201");
 
@@ -192,7 +192,7 @@ test("/auth/create (creating a professor account)", async t => {
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 201, "should return status code of 201");
 
@@ -215,7 +215,7 @@ test("/auth/create (creating a professor account, but no professor invitation ex
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -243,7 +243,7 @@ test("/auth/create (creating a professor account, but setting the role as a admi
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -269,7 +269,7 @@ test("/auth/create (creating a student account, but setting the role as a admin)
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -294,7 +294,7 @@ test("/auth/create (creating a account, but providing school name that does not 
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -322,7 +322,7 @@ test("/auth/create (creating a account, but the email that does not match the sc
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -349,7 +349,7 @@ test("/auth/create (creating a user account twice)", async t => {
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 201, "should return a status code of 201");
 
@@ -361,7 +361,7 @@ test("/auth/create (creating a user account twice)", async t => {
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 400, "should return a status code of 400");
 
@@ -384,7 +384,7 @@ test("/auth/create (creating a account, but checking the password uniqueness)", 
     .post("/auth/create")
     .send(user);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -398,8 +398,8 @@ test("/auth/create (creating a account, but checking the password uniqueness)", 
 
 test("/auth/verify/:verification_id", async t => {
   const userAccount = await db.createUser({
-    role: "admin",
     verified: false,
+    role: InvitationRoles.ADMIN,
     school_id: t.context.school.id
   });
 
@@ -424,7 +424,7 @@ test("/auth/verify/:verification_id", async t => {
     `/auth/verify/${verificationToken}`
   );
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(
     responseTwo.status,
@@ -440,14 +440,14 @@ test("/auth/verify/:verification_id", async t => {
 
 test("/auth/verify/:verification_id (verifying account with a invaild temp verification token)", async t => {
   const userAccount = await db.createUser({
-    role: "student",
     verified: false,
+    role: InvitationRoles.STUDENT,
     school_id: t.context.school.id
   });
 
   const responseTwo = await request(app).get("/auth/verify/foobarbaz");
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(
     responseTwo.status,
@@ -463,8 +463,8 @@ test("/auth/verify/:verification_id (verifying account with a invaild temp verif
 
 test("/auth/verify/:verification_id (verifying a account with a expired token)", async t => {
   const userAccount = await db.createUser({
-    role: "admin",
     verified: false,
+    role: InvitationRoles.ADMIN,
     school_id: t.context.school.id
   });
 
@@ -484,7 +484,7 @@ test("/auth/verify/:verification_id (verifying a account with a expired token)",
     `/auth/verify/${verificationToken}`
   );
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(
     responseTwo.status,
@@ -501,8 +501,8 @@ test("/auth/verify/:verification_id (verifying a account with a expired token)",
 test("/auth/send/verification", async t => {
   const userAccount = await db.createUser({
     verified: false,
-    role: "professor",
-    school_id: t.context.school.id
+    school_id: t.context.school.id,
+    role: InvitationRoles.PROFESSOR
   });
 
   const response = await request(app)
@@ -511,7 +511,7 @@ test("/auth/send/verification", async t => {
       email: userAccount.email
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return a status code of 200");
 
@@ -521,7 +521,7 @@ test("/auth/send/verification", async t => {
 test("/auth/send/verification (sending invalid data)", async t => {
   const response = await request(app).post("/auth/send/verification");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status code of 400");
 
@@ -547,8 +547,8 @@ test("/auth/send/verification (sending a email verification, but the user does n
 
 test("/auth/send/verification (sending a email verification, but the user account is verified)", async t => {
   const userAccount = await db.createUser({
-    role: "professor",
-    school_id: t.context.school.id
+    school_id: t.context.school.id,
+    role: InvitationRoles.PROFESSOR
   });
 
   const response = await request(app)
@@ -557,7 +557,7 @@ test("/auth/send/verification (sending a email verification, but the user accoun
       email: userAccount.email
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return a status code of 200");
 
@@ -566,8 +566,8 @@ test("/auth/send/verification (sending a email verification, but the user accoun
 
 test("/auth/send/verification (sending a email verification, but the user account has been deactivated)", async t => {
   const userAccount = await db.createUser({
-    role: "professor",
-    school_id: t.context.school.id
+    school_id: t.context.school.id,
+    role: InvitationRoles.PROFESSOR
   });
 
   await db.updateUserInfo(userAccount.email, { deactivated: true });
@@ -578,7 +578,7 @@ test("/auth/send/verification (sending a email verification, but the user accoun
       email: userAccount.email
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return a status code of 200");
 
@@ -606,7 +606,7 @@ test("/auth/authenticate", async t => {
       password: mockUserData.password
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return status code of 200");
 
@@ -630,7 +630,7 @@ test("/auth/authenticate (sending invalid data)", async t => {
       password: true
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -651,7 +651,7 @@ test("/auth/authenticate (user account does not exist)", async t => {
       password: mockUser.password
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -679,7 +679,7 @@ test("/auth/authenticate (user password is incorrect)", async t => {
       password: "SOME_DANK_ASS_PASSWORD"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 401");
 
@@ -707,7 +707,7 @@ test("/auth/authenticate (user account is not verified)", async t => {
       password: mockUser.password
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "should return status code of 401");
 
@@ -739,7 +739,7 @@ test("/auth/authenticate (user account is deactivated)", async t => {
       password: mockUser.password
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "should return status code of 401");
 
@@ -764,7 +764,7 @@ test("/auth/send/reset-password", async t => {
     .post("/auth/send/reset-password")
     .send({ email: newUser.email });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return back a status code of 200");
 
@@ -782,7 +782,7 @@ test("/auth/send/reset-password", async t => {
       password: mockUser.password
     });
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 401, "should return status code of 401");
 
@@ -797,7 +797,7 @@ test("/auth/send/reset-password (sending invalid data)", async t => {
     .post("/auth/send/reset-password")
     .send({ email: "true" });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
@@ -821,7 +821,7 @@ test("/auth/send/reset-password (sending reset password request, but one was alr
       email: newUser.email
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return a status of 200");
 
@@ -831,7 +831,7 @@ test("/auth/send/reset-password (sending reset password request, but one was alr
       email: newUser.email
     });
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "This should return a status of 200");
 
@@ -855,7 +855,7 @@ test("/auth/send/reset-password (sending reset password request, but account has
       email: newUser.email
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status of 200");
 
@@ -878,7 +878,7 @@ test("/auth/send/reset-password (sending reset password request, but account doe
       email: mockeUser.email
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return a status of 200");
 
@@ -919,7 +919,7 @@ test("/auth/reactivate", async t => {
       password: mockUser.password
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "This should return a status of 401");
 
@@ -932,7 +932,7 @@ test("/auth/reactivate", async t => {
     `/auth/reactivate?token=${TEMP_TOKEN}`
   );
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 302, "This should return a status of 302");
 
@@ -947,7 +947,7 @@ test("/auth/reactivate", async t => {
       password: mockUser.password
     });
 
-  t.log(JSON.stringify(responseThree.body, null, 4));
+  t.log(JSON.stringify(responseThree, null, 4));
 
   t.is(responseThree.status, 200, "This should return a status of 200");
 });
@@ -971,7 +971,7 @@ test("/auth/reactivate (sending a invalid token)", async t => {
     "/auth/reactivate?token=nsdjinioed3isdisl"
   );
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 302, "This should return a status of 302");
 
@@ -983,7 +983,7 @@ test("/auth/reactivate (sending a invalid token)", async t => {
 test("/auth/reactivate (providing no token)", async t => {
   const response = await request(app).get("/auth/reactivate");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 302, "This should return a status of 302");
 });
@@ -1023,7 +1023,7 @@ test("/auth/reset-password", async t => {
       new_password: NEW_PASSWORD
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "This should return a status of 200");
 
@@ -1038,7 +1038,7 @@ test("/auth/reset-password", async t => {
       password: NEW_PASSWORD
     });
 
-  t.log(JSON.stringify(responseTwo.body, null, 4));
+  t.log(JSON.stringify(responseTwo, null, 4));
 
   t.is(responseTwo.status, 200, "This should return a status of 200");
 });
@@ -1048,7 +1048,7 @@ test("/auth/reset-password (sending invalid data)", async t => {
     .post("/auth/reset-password")
     .send({});
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status of 400");
 
@@ -1090,7 +1090,7 @@ test("/auth/reset-password (the user's account has not been deactivated)", async
       new_password: NEW_PASSWORD
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status of 200");
 
@@ -1109,7 +1109,7 @@ test("/auth/reset-password (sending a invalid token)", async t => {
       tmp_token: "blah-blah-blah"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "This should return a status of 200");
 
@@ -1152,7 +1152,7 @@ test("/auth/reset-password (reset password but sending the old password as the n
       new_password: mockUser.password
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status of 400");
 
@@ -1200,7 +1200,7 @@ test("/auth/reset-password (updating the password, however not passing the uniqu
       new_password: "mockUser.password"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status of 400");
 
@@ -1231,7 +1231,7 @@ test("/auth/reset-password (reseting password password for a account that does n
       new_password: "@FOOBARBA3"
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "This should return a status of 400");
 
@@ -1276,7 +1276,7 @@ test("/auth/reset-password (reseting password with a expired token)", async t =>
       new_password: NEW_PASSWORD
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "This should return a status of 401");
 
@@ -1318,7 +1318,7 @@ test("/auth/reset-password (reseting password with a token witha invalid signatu
       new_password: NEW_PASSWORD
     });
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "This should return a status of 401");
 
@@ -1349,7 +1349,7 @@ test("/auth/update-password", async t => {
     })
     .set("x-token", `Bearer ${newUser.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Shoudl return status code of 200");
 
@@ -1381,7 +1381,7 @@ test("/auth/update-password (updatinng password but setting the old password as 
     })
     .set("x-token", `Bearer ${newUser.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should return status code of 400");
 
@@ -1414,7 +1414,7 @@ test("/auth/update-password (updating password but the old passowrd is incorrect
     })
     .set("x-token", `Bearer ${newUser.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should return status code of 400");
 
@@ -1447,7 +1447,7 @@ test("/auth/update-password (updating password while authenticated, but the new 
     })
     .set("x-token", `Bearer ${newUser.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should return status code of 400");
 

@@ -1,6 +1,7 @@
 import { URL } from "url";
 
 import * as dateFn from "date-fns";
+import * as _ from "lodash";
 
 // utils
 import ErrorResponse from "../../common/utils/error";
@@ -67,11 +68,11 @@ const sendEmail = async (invitation: Invitation): Promise<void> => {
   );
   if (registeredSchool === null) {
     logger.error(
-      "Internal error, school not found when sending invitation email"
+      "Internal server error, school not found when sending invitation email"
     );
 
     throw new Error(
-      "Internal error, school not found when sending invitation email"
+      "Internal server error, school not found when sending invitation email"
     );
   }
 
@@ -79,7 +80,7 @@ const sendEmail = async (invitation: Invitation): Promise<void> => {
   if (invitation.from === APP_NAME) {
     if (invitation.type !== InvitationRoles.ADMIN) {
       logger.error(
-        "Internal error, The service was sending a non admin invitation"
+        "Internal server error, The service was sending a non admin invitation"
       );
     }
 
@@ -140,11 +141,11 @@ const createInvitation = async (
       logger
         .child({ school_id: schoolId })
         .error(
-          "Internal error, invitation was not created becuase the school was not found"
+          "Internal server error, invitation was not created becuase the school was not found"
         );
 
       throw new Error(
-        "Internal error, invitation was not created becuase the school was not found"
+        "Internal server error, invitation was not created becuase the school was not found"
       );
     }
 
@@ -250,7 +251,7 @@ export const writebulkInvitation = async (
         .error("Provided school id does not exist school id");
 
       throw new Error(
-        "Internal error, failed to write bulk invitation because school was not found"
+        "Internal server error, failed to write bulk invitation because school was not found"
       );
     }
 
@@ -382,7 +383,7 @@ export const sendbulkInvitation = async (
         .error("This user account does not exist found");
 
       throw new Error(
-        "Internal error, failed to create invitation because user account does not exist"
+        "Internal server error, failed to create invitation because user account does not exist"
       );
     }
 
@@ -408,6 +409,8 @@ export const sendbulkInvitation = async (
       { id: userAccount.school_id },
       { name: 1, _id: 0 }
     );
+
+    emails = _.uniq(emails);
 
     const bulkInsertedInvitations = await writebulkInvitation(
       userId,
@@ -522,7 +525,7 @@ export const sendInvitation = async (
         .error("This user account does not exist found");
 
       throw new Error(
-        "Internal error, failed to create invitation because user account does not exist"
+        "Internal server error, failed to create invitation because user account does not exist"
       );
     }
 
@@ -602,11 +605,6 @@ export const deleteInvitation = async (
       },
       { role: 1, _id: 0 }
     );
-    if (userAccount === null) {
-      logger.error("Internal error, user account doe snot exist");
-
-      throw new Error("Internal error, user account doe snot exist");
-    }
 
     // if the user is a admin of the school they can delete the invitation as well
     if (userAccount.role === InvitationRoles.ADMIN) {
@@ -657,13 +655,13 @@ export const updateInvitation = async (
   try {
     const userAccount = await userModel.findOne(
       { id: userId },
-      { id: 1, school_id: 1, role: 1, _id: 0 }
+      {
+        id: 1,
+        _id: 0,
+        role: 1,
+        school_id: 1
+      }
     );
-    if (userAccount === null) {
-      logger.error("Internal error, user account not found");
-
-      throw new Error("Internal error, user account not found");
-    }
 
     if (
       userAccount.role !== InvitationRoles.ADMIN &&
@@ -706,11 +704,11 @@ export const updateInvitation = async (
     );
     if (status.n === 0) {
       logger.error(
-        "Internal error, Failed to update the invitation type in invitations collection"
+        "Internal server error, Failed to update the invitation type in invitations collection"
       );
 
       throw new Error(
-        "Internal error, Failed to update the invitation type in invitations collection"
+        "Internal server error, Failed to update the invitation type in invitations collection"
       );
     }
   } catch (err) {
@@ -735,11 +733,11 @@ export const sendbulkAdminInvitations = async (
     );
     if (registeredSchool === null) {
       logger.error(
-        "Internal error, school was not located in the registries collection"
+        "Internal server error, school was not located in the registries collection"
       );
 
       throw new Error(
-        "Internal error, school was not located in the registries collection"
+        "Internal server error, school was not located in the registries collection"
       );
     }
 

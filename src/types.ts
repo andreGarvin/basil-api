@@ -7,7 +7,7 @@ export interface State {
 export interface PaginationResults<T> {
   page: number;
   limit: number;
-  search: string;
+  search?: string;
   results: any[];
   next_page: number;
 }

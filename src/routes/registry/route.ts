@@ -8,7 +8,7 @@ import * as invitation from "../invitation/index";
 import * as registry from "./index";
 
 // utils
-import validationResponse from "../../common/utils/joi-validate-response";
+import joiValidationResponse from "../../common/utils/joi-validate-response";
 import returnInt from "../../common/utils/return-int";
 
 // middleware
@@ -32,7 +32,7 @@ router.post("/register", apiAuthenticationMiddleware, (req, res, next) => {
     return res
       .status(400)
       .json(
-        ValidationJsonResponse({ errors: validationResponse(error.details) })
+        ValidationJsonResponse({ errors: joiValidationResponse(error.details) })
       );
   }
 
@@ -51,11 +51,11 @@ router.post(
       abortEarly: false
     });
     if (error) {
-      return res
-        .status(400)
-        .json(
-          ValidationJsonResponse({ errors: validationResponse(error.details) })
-        );
+      return res.status(400).json(
+        ValidationJsonResponse({
+          errors: joiValidationResponse(error.details)
+        })
+      );
     }
 
     return invitation
@@ -84,8 +84,18 @@ router.get("/search", (req, res, next) => {
     return res
       .status(400)
       .json(
-        ValidationJsonResponse({ errors: validationResponse(error.details) })
+        ValidationJsonResponse({ errors: joiValidationResponse(error.details) })
       );
+  }
+
+  if (!body.search) {
+    return res.status(200).json({
+      results: [],
+      next_page: -1,
+      page: body.page,
+      limit: body.limit,
+      search: body.search
+    });
   }
 
   return registry

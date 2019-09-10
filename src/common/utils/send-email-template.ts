@@ -19,22 +19,24 @@ import { NO_REPLY } from "../../config";
 sendgrid.setApiKey(process.env.SENDGRID_API_KEY);
 
 handlebars.registerHelper("Badge", (name: string) => {
-  // grabbing the name name of the school or class
-  name = handlebars.Utils.escapeExpression(name);
+  if (name) {
+    // grabbing the name name of the school or class
+    name = handlebars.Utils.escapeExpression(name);
 
-  // getting the first character of the name
-  const firstCharacter: string = name[0].toUpperCase();
-  // generating a random color for the invitation email
-  const randomColor: string = (0x1000000 + Math.random() * 0xffffff)
-    .toString(16)
-    .substr(1, 6);
+    // getting the first character of the name
+    const firstCharacter: string = name[0].toUpperCase();
+    // generating a random color for the invitation email
+    const randomColor: string = (0x1000000 + Math.random() * 0xffffff)
+      .toString(16)
+      .substr(1, 6);
 
-  // this is to created a badge each invitation or notification that is sent out
-  return new handlebars.SafeString(`
-    <div id="badge" style="background-color: #${randomColor}">
-      <p style='margin: 10px 25px 10px 20px;'>${firstCharacter}</p>
-    </div>
-  `);
+    // this is to created a badge each invitation or notification that is sent out
+    return new handlebars.SafeString(`
+      <div id="badge" style="background-color: #${randomColor}">
+        <p style='margin: 10px 25px 10px 20px;'>${firstCharacter}</p>
+      </div>
+    `);
+  }
 });
 
 // directory path where all the templates located
@@ -52,7 +54,7 @@ export enum TEMPLATES {
   ACCOUNT_VERIFICATION = "authentication/account-verification",
 
   // workspace email templates
-  NEW_WOKRSPACE = "workspace/new-workspace-created",
+  // NEW_WOKRSPACE = "notification/new-workspace-created",
   WORKSPACE_INVITATION = "workspace/workspace-invite"
 }
 

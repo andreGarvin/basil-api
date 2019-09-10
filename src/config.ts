@@ -32,7 +32,6 @@ export const TEMP_TOKEN_EXPIRATION =
   process.env.TEMP_TOKEN_EXPIRATION || "24 hours";
 
 // mongo database connection string
-
 // mongodb test database
 const MONGO_TEST_URI = "mongodb://localhost:27017/pivotlms-test";
 
@@ -42,6 +41,9 @@ export const MONGO_URI: string =
 
 export const NO_REPLY =
   process.env.NO_REPLY || "Pivotlms <no-reply@pivotlms.com>";
+
+export const MAX_FILE_SIZE =
+  parseInt(process.env.MAX_FILE_SIZE, 10) || 1024 * 1024;
 
 export const ValidationJsonResponse = (context?: { [key: string]: any }) => {
   return ErrorResponse(

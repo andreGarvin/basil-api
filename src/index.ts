@@ -32,6 +32,22 @@ import routes from "./routes";
 // config
 import { MONGO_URI, ORIGIN_WHITE_LIST, PORT } from "./config";
 
+import * as types from "./types";
+
+declare global {
+  namespace Express {
+    export interface Request {
+      state?: types.State;
+    }
+  }
+
+  namespace express {
+    export interface Request {
+      state?: types.State;
+    }
+  }
+}
+
 // this checks if the server has all environment variables needed
 if (process.env.NODE_ENV !== "test") {
   const requiredEnvVariables: string[] = [

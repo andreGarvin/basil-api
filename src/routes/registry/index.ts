@@ -95,8 +95,8 @@ export async function insert(
  */
 export async function searchRegistry(
   search?: string,
-  page: number = 1,
-  limit: number = 15
+  page?: number,
+  limit?: number
 ): Promise<PaginationResults<RegisteredSchoolInfo>> {
   try {
     // creating a aggregation on the registry documents
@@ -116,6 +116,7 @@ export async function searchRegistry(
             id: 0,
             _id: 0,
             __v: 0,
+            type: 0,
             domain: 0,
             created_at: 0,
             deactivated: 0,
@@ -126,10 +127,9 @@ export async function searchRegistry(
       .limit(limit)
       .skip(page > 0 ? (page - 1) * limit : 0);
 
+    // the number of the nextPage
+    let nextPage = -1;
     if (schools.length) {
-      // the number of the nextPage
-      const nextPage = page + 1;
-
       // checking if there is more in the pagination cursor
       const isMore: boolean = await registryModel
         .find({
@@ -144,21 +144,15 @@ export async function searchRegistry(
         .cursor()
         .next();
 
-      return {
-        page,
-        limit,
-        search,
-        results: schools,
-        next_page: isMore ? nextPage : -1
-      };
+      nextPage = isMore ? page + 1 : -1;
     }
 
     return {
       page,
       limit,
       search,
-      next_page: -1,
-      results: schools
+      results: schools,
+      next_page: nextPage
     };
   } catch (err) {
     logger

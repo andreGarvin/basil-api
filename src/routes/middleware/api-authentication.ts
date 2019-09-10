@@ -27,7 +27,7 @@ export default function apiAuthentication(
       );
       if (error) {
         logger.warn("Invalid api key content");
-        logger.debug(error);
+        logger.child(error).debug("error");
 
         return res.status(401).json({
           message: "Invalid api key",

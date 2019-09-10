@@ -18,6 +18,7 @@ import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
 
 import app from "../../index";
+import { InvitationRoles } from "../../routes/invitation";
 
 test.beforeEach(async t => {
   const generatedSchool = await db.createSchool();
@@ -26,7 +27,7 @@ test.beforeEach(async t => {
   };
 
   const user = await db.createUser({
-    role: "student",
+    role: InvitationRoles.STUDENT,
     school_id: generatedSchool.id
   });
 
@@ -47,7 +48,7 @@ test("/auth/token/authenicate", async t => {
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "Should be status code of 200");
 
@@ -62,7 +63,7 @@ test("/auth/token/authenicate (providing a invalid token)", async t => {
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer sajfjkdsajkdhjakshk`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should be status code of 400");
 
@@ -89,7 +90,7 @@ test("/auth/token/authenicate (providing a expired token)", async t => {
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer ${exipredToken}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "Should be status code of 200");
 
@@ -114,7 +115,7 @@ test("/auth/token/authenicate (providing a token with no existing account)", asy
     .post("/auth/token/authenticate")
     .set("x-token", `Bearer ${token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 404, "Should be status code of 404");
 
@@ -130,7 +131,7 @@ test("/auth/token/refresh", async t => {
     .put("/auth/token/refresh")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200, "should return a status of 200");
 
@@ -152,7 +153,7 @@ test("/auth/token/refresh (refresh a token for a account that is deactivated)", 
     .put("/auth/token/refresh")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "should return a status of 401");
 
@@ -169,7 +170,7 @@ test("/auth/token/refresh (refresh a token for a account that is not verified)",
     .put("/auth/token/refresh")
     .set("x-token", `Bearer ${t.context.user.token}`);
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 401, "should return a status of 401");
 
@@ -185,13 +186,13 @@ test("/auth/token/refresh (not sending a token)", async t => {
     .put("/auth/token/refresh")
     .set("x-token", "");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
-  t.is(response.status, 400, "should return a status of 401");
+  t.is(response.status, 401, "should return a status of 401");
 
   t.is(
     response.body.error_code,
-    AuthenticationError.INVALID_AUTHORIZATION_TYPE_EXCEPTION
+    AuthenticationError.FAILED_AUTHENTICATION_EXCEPTION
   );
 });
 
@@ -210,7 +211,7 @@ test("/auth/token/refresh (sending the wrong authorization type)", async t => {
     .put("/auth/token/refresh")
     .set("x-token", "Bear dasdsadsadsadsaddasd");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return a status of 400");
 

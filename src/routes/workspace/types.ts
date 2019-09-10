@@ -4,7 +4,7 @@ export interface Workspace {
   type: string;
   scope: string;
   creator: string;
-  section: string;
+  section?: string;
   school_id: string;
   archived: boolean;
   created_at: string;
@@ -19,12 +19,12 @@ export interface NewWorkspaceInfo {
   description?: string;
 }
 
-export interface WorkspaceInfo {
+export interface AggregatedWorkspaceInfo {
   id: string;
   name: string;
   type: string;
   scope: string;
-  meta: MetaField;
+  meta?: MetaField;
   creator: string;
   section: string;
   archived: boolean;
@@ -33,7 +33,12 @@ export interface WorkspaceInfo {
 }
 
 interface MetaField {
+  status: string;
+  joined_at: string;
+  is_active: boolean;
   is_creator: boolean;
+  is_member?: boolean;
+  last_active_at: string;
 }
 
 export interface UpdatedWorkspaceInfo {

@@ -30,7 +30,6 @@ const invitationSchema = new Schema({
   // The person the invite is being sent to
   email: {
     required: true,
-    unique: true,
     type: String
   },
 
@@ -63,7 +62,10 @@ const invitationSchema = new Schema({
   },
 
   // time stamp of when the invite was update
-  last_updated_at: Date
+  last_updated_at: {
+    default: null,
+    type: Date
+  }
 });
 
 // this creates a index on the documents
@@ -71,5 +73,7 @@ set("useCreateIndex", true);
 
 // This creates a index on the field 'expires_at' and deletes the doucment after zero seconds
 invitationSchema.index({ expires_at: 1 }, { exipresAfterSeconds: 0 });
+
+invitationSchema.index({ email: 1, school_id: 1 }, { unique: true });
 
 export default model<InvitationModel>("invitations", invitationSchema);

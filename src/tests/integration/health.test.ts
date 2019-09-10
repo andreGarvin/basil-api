@@ -9,7 +9,7 @@ const request = supertest(app);
 test("/health", async t => {
   const response = await request.get("/health");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200);
 
@@ -19,7 +19,7 @@ test("/health", async t => {
 test("/health?heavy=true", async t => {
   const response = await request.get("/health?heavy=true");
 
-  t.log(JSON.stringify(response.body, null, 4));
+  t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 200);
 

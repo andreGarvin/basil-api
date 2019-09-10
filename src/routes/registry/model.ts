@@ -19,7 +19,10 @@ const registrySchema = new Schema({
   },
 
   // the type of school that was inserted into the registry
-  type: String,
+  type: {
+    default: "",
+    type: String
+  },
 
   /* This is the schools license key, currently used to indentify
   admins and professors when creating a account.
@@ -43,7 +46,10 @@ const registrySchema = new Schema({
     This resticts admins and professors from inviting users to the
     school if they do not have the same email domain as the school
   */
-  domain: String,
+  domain: {
+    default: "",
+    type: String
+  },
 
   // The name of the school
   name: {

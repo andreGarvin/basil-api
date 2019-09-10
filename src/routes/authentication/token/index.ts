@@ -140,7 +140,7 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
     );
 
     if (status.n === 0) {
-      const fields = Object.assign(status, {
+      const fields = Object.assign({}, status, {
         id: user.id,
         school_id: user.school_id
       });
