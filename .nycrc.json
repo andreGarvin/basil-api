@@ -1,6 +1,12 @@
 {
-  "per-file": true,
+  "extension": [".ts"],
   "check-coverage": false,
-  "include": ["src/routes/**/*.ts"],
-  "extends": "@istanbuljs/nyc-config-typescript"
+  "include": ["src/routes/**/*"],
+  "extends": "@istanbuljs/nyc-config-typescript",
+  "exclude": [
+    "**/*.d.ts",
+    "**/types.ts",
+    "**/model.ts",
+    "**/request-schemas.ts"
+  ]
 }

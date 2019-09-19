@@ -383,6 +383,8 @@ test("/api/registry/register (providing a domain, but some of the the admins ema
     response.body.school_id
   );
 
+  t.log(invitations);
+
   t.is(invitations.length, 2, "There should only be two admin invites");
 
   t.notDeepEqual(invitations, [], "This should not be a empty array");
@@ -406,14 +408,16 @@ test("/api/registry/search", async t => {
 
   t.is(responseTwo.status, 200, "should return status of 200");
 
-  const school = await db.findSchoolbyId(response.body.school_id);
-
   t.deepEqual(responseTwo.body, {
     next_page: -1,
-    results: [],
+    result: [
+      {
+        name: t.context.registration.name,
+        photo_url: ""
+      }
+    ],
     search: "",
-    limit: 15,
-    page: 1
+    limit: 15
   });
 
   const responseThree = await request(app).get(
@@ -427,13 +431,12 @@ test("/api/registry/search", async t => {
   t.deepEqual(responseThree.body, {
     next_page: -1,
     search: "we",
-    results: [],
-    limit: 15,
-    page: 1
+    result: [],
+    limit: 15
   });
 
   const responseFour = await request(app).get(
-    "/api/registry/search?page=23&limit=hell"
+    "/api/registry/search?page=3&limit=hell"
   );
 
   t.log(JSON.stringify(responseFour, null, 4));
@@ -442,9 +445,8 @@ test("/api/registry/search", async t => {
 
   t.deepEqual(responseFour.body, {
     next_page: -1,
-    results: [],
+    result: [],
     search: "",
-    limit: 15,
-    page: 23
+    limit: 15
   });
 });

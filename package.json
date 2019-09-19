@@ -5,11 +5,14 @@
   "main": "build/index.js",
   "scripts": {
     "start": "node .",
+    "stop:db": "docker stop mongodb-dev",
     "start:dev": "NODE_ENV=dev nodemon .",
     "build": "tsc --project tsconfig.json",
+    "restart:db": "docker restart mongodb-dev",
     "test:integration": "NODE_ENV=test nyc ava",
     "test": "NODE_DEBUG=true NODE_ENV=test nyc ava",
-    "build:watch": "tsc -w --project tsconfig.json"
+    "build:watch": "tsc -w --project tsconfig.json",
+    "launch:db": "docker run -d --name mongodb-dev -p 27017:27017 mongo:latest"
   },
   "ava": {
     "failFast": true,
@@ -38,7 +41,7 @@
     "body-parser": "1.18.2",
     "chalk": "2.4.2",
     "cors": "2.8.5",
-    "csv-parse": "4.3.1",
+    "csv-parse": "4.4.6",
     "csv-stringify": "5.3.0",
     "date-fns": "1.30.1",
     "dotenv": "8.0.0",

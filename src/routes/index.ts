@@ -1,6 +1,9 @@
 import * as express from "express";
 const router = express.Router();
 
+// config
+import { APP_NAME } from "../config";
+
 // routes
 import authentication from "./authentication/route";
 import invitation from "./invitation/route";
@@ -20,9 +23,7 @@ const GIT_SHA: string = process.env.GIT_SHA || "no revision";
 
 // this returns the get sha of the repository
 router.get("/version", (req, res) => {
-  return res
-    .status(200)
-    .json({ revision: GIT_SHA, service: process.env.APP_NAME });
+  return res.status(200).json({ revision: GIT_SHA, service: APP_NAME });
 });
 
 router.get("/health", health);

@@ -3,6 +3,15 @@ import { URL } from "url";
 import * as dateFn from "date-fns";
 import * as _ from "lodash";
 
+// models
+import workspaceMemberModel from "../workspace/member/model";
+import userModel from "../authentication/model";
+import registryModel from "../registry/model";
+import invitationModel from "./model";
+
+// config
+import { APP_NAME, NO_REPLY } from "../../config";
+
 // utils
 import ErrorResponse from "../../common/utils/error";
 import logger from "../../common/logger";
@@ -12,13 +21,9 @@ import {
   TEMPLATES
 } from "../../common/utils/send-email-template";
 
-// models
-import userModel from "../authentication/model";
-import registryModel from "../registry/model";
-import invitationModel from "./model";
-
-// config
-import { APP_NAME, NO_REPLY } from "../../config";
+// error codes
+import AuthenticationError from "../authentication/error-codes";
+import InvitationError from "./error-codes";
 
 // types
 import {
@@ -28,14 +33,10 @@ import {
   Invitation
 } from "./types";
 
-// error codes
-import AuthenticationError from "../authentication/error-codes";
-import InvitationError from "./error-codes";
-
 export enum InvitationRoles {
-  ADMIN = "admin",
+  PROFESSOR = "professor",
   STUDENT = "student",
-  PROFESSOR = "professor"
+  ADMIN = "admin"
 }
 
 // helper fucntion
@@ -209,7 +210,7 @@ const createInvitation = async (
       created_at: createdAt,
 
       // the type of invitation and role the will inherit when creating their account
-      type: role || InvitationRoles.STUDENT,
+      type: role,
 
       expires_at: expirationDate
     });
@@ -255,7 +256,7 @@ export const writebulkInvitation = async (
       );
     }
 
-    const invitationBatch = emails
+    const invitationBatch = _.uniq(emails)
       .map(email => ({ email, inserted: false }))
       // filering all emails that do not match the schools domain
       .map((invitation: any) => {
@@ -409,8 +410,6 @@ export const sendbulkInvitation = async (
       { id: userAccount.school_id },
       { name: 1, _id: 0 }
     );
-
-    emails = _.uniq(emails);
 
     const bulkInsertedInvitations = await writebulkInvitation(
       userId,
@@ -615,6 +614,13 @@ export const deleteInvitation = async (
         },
         school_id: invitation.school_id
       });
+
+      await workspaceMemberModel.deleteMany({
+        user_id: {
+          $options: "i",
+          $regex: email
+        }
+      });
       return;
     }
 
@@ -626,7 +632,16 @@ export const deleteInvitation = async (
       },
       school_id: invitation.school_id
     });
+
     if (status.n === 1) {
+      // delete all workspace members that has the email as the value 'user_id' field
+      await workspaceMemberModel.deleteMany({
+        user_id: {
+          $options: "i",
+          $regex: email
+        }
+      });
+    } else if (status.n === 0) {
       logger
         .child(status)
         .error("Failed to delete invitation from invitations collections");
@@ -657,7 +672,6 @@ export const updateInvitation = async (
       { id: userId },
       {
         id: 1,
-        _id: 0,
         role: 1,
         school_id: 1
       }

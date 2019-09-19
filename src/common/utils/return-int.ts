@@ -5,5 +5,5 @@ export default (num: string, base: number, defaultNumber?: number) => {
     return defaultNumber;
   }
 
-  return parsedNumber;
+  return Math.max(1, parsedNumber);
 };

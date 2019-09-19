@@ -188,7 +188,7 @@ test("/api/workspace/create (only providing the name of workspace, default value
   );
 });
 
-test("/api/workspace/create (creating a workspace without providing the section)", async t => {
+test("/api/workspace/create (creating a workspace that is class without providing the section)", async t => {
   const mockWorkspace = db.createMockWorkspaceInfo();
 
   const response = await request(app)
@@ -254,7 +254,7 @@ test("/api/workspace/create (can creating workspaces with the same name but diff
   t.is(responseTwo.status, 201, "should return status of 200");
 });
 
-test("/api/workspace/create (a student attempts to create a workspace)", async t => {
+test("/api/workspace/create (a student attempting to create a workspace)", async t => {
   await db.updateUserInfo(t.context.user.id, { role: InvitationRoles.STUDENT });
 
   const mockWorkspace = db.createMockWorkspaceInfo();
@@ -338,8 +338,16 @@ test("/api/workspace/info/:workspace_id [PATCH]", async t => {
 });
 
 test("/api/workspace/info/:workspace_id [PATCH] (sending invalid data)", async t => {
+  const mockWorkspace = db.createMockWorkspaceInfo();
+
+  const workspace = await db.createWorkspace(
+    t.context.user.id,
+    t.context.user.school_id,
+    mockWorkspace
+  );
+
   const response = await request(app)
-    .patch(`/api/workspace/info/dfdfsds`)
+    .patch(`/api/workspace/info/${workspace.id}`)
     .send({
       description: "repeat".repeat(132),
       scope: "PrIvAtE",
@@ -367,6 +375,36 @@ test("/api/workspace/info/:workspace_id [PATCH] (updating a workspace that does 
   t.is(response.status, 404, "should return status of 404");
 
   t.is(response.body.error_code, WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION);
+});
+
+test("/api/workspace/info/:workspace_id [PATCH] (updating a workspace but the user is not the creator of thw workspace)", async t => {
+  const mockWorkspace = db.createMockWorkspaceInfo();
+
+  const workspace = await db.createWorkspace(
+    t.context.user.id,
+    t.context.user.school_id,
+    mockWorkspace
+  );
+
+  await db.updateWorkspaceInfo(workspace.id, {
+    creator: ""
+  });
+
+  const response = await request(app)
+    .patch(`/api/workspace/info/${workspace.id}`)
+    .send({
+      description: "This workspace does not exist"
+    })
+    .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(response, null, 4));
+
+  t.is(response.status, 401, "should return status of 401");
+
+  t.is(
+    response.body.error_code,
+    WorkspaceMemberError.NOT_WORKSPACE_CREATOR_EXCEPTION
+  );
 });
 
 test("/api/workspace/info/:workspace_id [PATCH] (updating a workspace that is archived)", async t => {
@@ -526,7 +564,7 @@ test("/api/workspace/info/:workspace_id", async t => {
   );
 
   const response = await request(app)
-    .get(`/api/workspace/${workspace.id}`)
+    .get(`/api/workspace/info/${workspace.id}`)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
   t.log(JSON.stringify(response, null, 4));
@@ -554,7 +592,6 @@ test("/api/workspace/info/:workspace_id", async t => {
       status: workspaceMember.status,
       is_admin: workspaceMember.is_admin,
       is_active: workspaceMember.is_active,
-      joined_at: workspaceMember.joined_at,
       last_active_at: workspaceMember.last_active_at,
       is_creator: t.context.user.id === workspace.creator
     }
@@ -576,7 +613,7 @@ test("/api/workspace/info/:workspace_id (user is not a member of the public work
   });
 
   const response = await request(app)
-    .get(`/api/workspace/${workspace.id}`)
+    .get(`/api/workspace/info/${workspace.id}`)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
   t.log(JSON.stringify(response, null, 4));
@@ -603,7 +640,7 @@ test("/api/workspace/info/:workspace_id (user is not a member of the private wor
   });
 
   const response = await request(app)
-    .get(`/api/workspace/${workspace.id}`)
+    .get(`/api/workspace/info/${workspace.id}`)
     .set("x-token", `Bearer ${t.context.user.token}`);
 
   t.log(JSON.stringify(response, null, 4));
@@ -711,13 +748,13 @@ test("/api/workspace/ (the workspace is archived)", async t => {
 });
 
 test("/api/workspace/search", async t => {
-  const workspace = await db.createWorkspace(
+  await db.createWorkspace(
     t.context.user.id,
     t.context.user.school_id,
     Object.assign(db.createMockWorkspaceInfo(), { name: "workspace_1" })
   );
 
-  const workspaceTwo = await db.createWorkspace(
+  const workspace = await db.createWorkspace(
     t.context.user.id,
     t.context.user.school_id,
     Object.assign(db.createMockWorkspaceInfo(), {
@@ -726,13 +763,13 @@ test("/api/workspace/search", async t => {
     })
   );
 
-  const workspaceThree = await db.createWorkspace(
+  const otherWorkspace = await db.createWorkspace(
     t.context.user.id,
     t.context.user.school_id,
     Object.assign(db.createMockWorkspaceInfo(), { name: "workspace_3" })
   );
 
-  await db.updateWorkspaceMemberInfo(t.context.user.id, workspaceTwo.id, {
+  await db.updateWorkspaceMemberInfo(t.context.user.id, workspace.id, {
     removed: true
   });
 
@@ -744,13 +781,13 @@ test("/api/workspace/search", async t => {
 
   t.is(response.status, 200, "should return status of 200");
 
-  t.deepEqual(response.body, {
-    page: 1,
-    limit: 15,
-    search: "",
-    results: [],
-    next_page: -1
-  });
+  t.is(response.body.limit, 15);
+
+  t.is(response.body.search, "");
+
+  t.is(response.body.result.length, 3);
+
+  t.is(response.body.next_page, -1);
 
   const responseTwo = await request(app)
     .get("/api/workspace/search?search=w")
@@ -760,13 +797,13 @@ test("/api/workspace/search", async t => {
 
   t.is(responseTwo.status, 200, "should return status of 200");
 
-  t.deepEqual(responseTwo.body.page, 1);
+  t.is(responseTwo.body.search, "w");
 
-  t.deepEqual(responseTwo.body.next_page, -1);
+  t.is(responseTwo.body.next_page, -1);
 
-  t.deepEqual(responseTwo.body.results.length, 3);
+  t.is(responseTwo.body.result.length, 3);
 
-  await db.updateWorkspaceMemberInfo(t.context.user.id, workspaceThree.id, {
+  await db.updateWorkspaceMemberInfo(t.context.user.id, otherWorkspace.id, {
     removed: true
   });
 
@@ -778,5 +815,30 @@ test("/api/workspace/search", async t => {
 
   t.is(responseThree.status, 200, "should return status of 302");
 
-  t.is(responseThree.body.results.length, 2);
+  t.is(responseThree.body.result.length, 2);
+
+  const responseFour = await request(app)
+    .get("/api/workspace/search?limit=1")
+    .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(responseFour, null, 2));
+
+  t.is(responseFour.status, 200, "should return status of 302");
+
+  t.is(responseFour.body.result.length, 1);
+
+  const nextPage = responseFour.body.next_page;
+  t.not(nextPage, -1);
+
+  const responseFive = await request(app)
+    .get(`/api/workspace/search?page=${nextPage}&limit=1`)
+    .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(responseFive, null, 2));
+
+  t.is(responseFive.status, 200, "should return status of 302");
+
+  t.is(responseFive.body.result.length, 1);
+
+  t.is(responseFive.body.next_page, -1);
 });

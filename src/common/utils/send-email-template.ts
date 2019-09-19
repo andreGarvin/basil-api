@@ -55,7 +55,8 @@ export enum TEMPLATES {
 
   // workspace email templates
   // NEW_WOKRSPACE = "notification/new-workspace-created",
-  WORKSPACE_INVITATION = "workspace/workspace-invite"
+  WORKSPACE_INVITATION = "workspace/workspace-invite",
+  ACCEPTED_WORKSPACE_MEMBER_REQUEST = "workspace/accepted-workspace-request"
 }
 
 interface EmailBody extends MailData {

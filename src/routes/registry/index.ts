@@ -1,7 +1,8 @@
 // models
-import registryModel, { RegistratedSchoolModel } from "./model";
+import registryModel from "./model";
 
 // utils
+import Pagination from "../../common/utils/pagination";
 import ErrorResponse from "../../common/utils/error";
 import logger from "../../common/logger";
 
@@ -12,8 +13,6 @@ import { PaginationResults } from "../../types";
 // error codes
 // import AuthenticationError from "../authentication/error-codes";
 import RegistryError from "./error-codes";
-
-export const SERVICE = process.env.APP_NAME || "pivotlms-api";
 
 /**
  * Inserts a new school into the registry collection and adds
@@ -50,7 +49,7 @@ export async function insert(
           }
         ]
       },
-      { _id: 0, id: 1 }
+      { id: 1 }
     );
     if (registeredSchoolDocument) {
       logger
@@ -99,60 +98,44 @@ export async function searchRegistry(
   limit?: number
 ): Promise<PaginationResults<RegisteredSchoolInfo>> {
   try {
-    // creating a aggregation on the registry documents
-    const schools: RegistratedSchoolModel[] = await registryModel
-      .aggregate([
-        {
-          $match: {
-            name: {
-              $regex: new RegExp(`^${search}`),
-              $options: "i"
-            },
-            deactivated: false
-          }
-        },
-        {
-          $project: {
-            id: 0,
-            _id: 0,
-            __v: 0,
-            type: 0,
-            domain: 0,
-            created_at: 0,
-            deactivated: 0,
-            license_key: 0
-          }
-        }
-      ])
-      .limit(limit)
-      .skip(page > 0 ? (page - 1) * limit : 0);
+    const regexSearch = new RegExp(`^${search}`);
 
-    // the number of the nextPage
-    let nextPage = -1;
-    if (schools.length) {
-      // checking if there is more in the pagination cursor
-      const isMore: boolean = await registryModel
-        .find({
+    const query = [
+      {
+        $match: {
           deactivated: false,
           name: {
             $options: "i",
-            $regex: new RegExp(`^${search}`)
+            $regex: regexSearch
           }
-        })
-        .limit(limit)
-        .skip(nextPage > 0 ? (nextPage - 1) * limit : 0)
-        .cursor()
-        .next();
+        }
+      },
+      {
+        $project: {
+          id: 0,
+          __v: 0,
+          type: 0,
+          domain: 0,
+          created_at: 0,
+          deactivated: 0,
+          license_key: 0
+        }
+      }
+    ];
 
-      nextPage = isMore ? page + 1 : -1;
-    }
-
-    return {
+    // getting the pagination for all the documents in the p_registry collection
+    const paginationResult = await Pagination(
+      registryModel,
       page,
       limit,
+      query
+    );
+
+    return {
+      limit,
       search,
-      results: schools,
-      next_page: nextPage
+      result: paginationResult.result,
+      next_page: paginationResult.next_page
     };
   } catch (err) {
     logger

@@ -122,7 +122,7 @@ test("/api/workspace/member/bluk/:workspace_id", async t => {
 
 test("/api/workspace/member/bulk/:workspace_id (sending invalid data)", async t => {
   const response = await request(app)
-    .post(`/api/workspace/member/bulk/some-bullshit-workspace_id`)
+    .post(`/api/workspace/member/bulk/${t.context.workspace.id}`)
     .send({
       members: [
         {
@@ -144,7 +144,7 @@ test("/api/workspace/member/bulk/:workspace_id (adding a new member to a workspa
   const generateUserEmails = db.generateUserEmails(t.context.user.domain, 3);
 
   const response = await request(app)
-    .post("/api/workspace/member/bulk/some-workspace-id")
+    .post("/api/workspace/member/bulk/some-bullshit-workspace_id")
     .send({
       members: generateUserEmails.map(email => ({ admin: true, email }))
     })
@@ -803,11 +803,9 @@ test("/api/workspace/member/members/:workspace_id", async t => {
 
   t.is(response.body.next_page, -1);
 
-  t.is(response.body.page, 1);
-
   t.is(response.body.limit, 20);
 
-  t.is(response.body.results.length, 2);
+  t.is(response.body.result.length, 2);
 
   const responsThree = await request(app)
     .get(`/api/workspace/member/members/${t.context.workspace.id}?page=2`)
@@ -817,7 +815,7 @@ test("/api/workspace/member/members/:workspace_id", async t => {
 
   t.is(responsThree.status, 200, "should return a status code 200");
 
-  t.is(responsThree.body.results.length, 0);
+  t.is(responsThree.body.result.length, 0);
 });
 
 test("/api/workspace/member/invited/members/:workspace_id", async t => {
@@ -834,11 +832,55 @@ test("/api/workspace/member/invited/members/:workspace_id", async t => {
   t.is(response.status, 200, "should return a status code 200");
 
   t.deepEqual(response.body, {
-    page: 1,
     limit: 20,
     next_page: -1,
-    results: [{ email: generateUserEmail, is_admin: false }]
+    result: [{ email: generateUserEmail, is_admin: false }]
   });
+});
+
+test("/api/workspace/member/invited/members/:workspace_id checking if pagination works properly", async t => {
+  // adding another member that does not have a account
+  const generateUserEmails = db.generateUserEmails(t.context.user.domain, 22);
+
+  await Promise.all(
+    generateUserEmails.map(
+      async generateUserEmail =>
+        await db.createWorkspaceMember(
+          generateUserEmail,
+          t.context.workspace.id
+        )
+    )
+  );
+
+  const response = await request(app)
+    .get(`/api/workspace/member/invited/members/${t.context.workspace.id}`)
+    .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(response, null, 4));
+
+  t.is(response.status, 200, "should return a status code 200");
+
+  t.not(response.body.next_page, -1);
+
+  t.is(response.body.limit, 20);
+
+  t.is(response.body.result.length, 20);
+
+  const responseTwo = await request(app)
+    .get(
+      `/api/workspace/member/invited/members/${t.context.workspace.id}?page=${response.body.next_page}`
+    )
+    .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(responseTwo, null, 4));
+
+  t.is(responseTwo.status, 200, "should return a status code 200");
+
+  t.is(responseTwo.body.next_page, -1);
+
+  t.is(responseTwo.body.limit, 20);
+
+  t.is(responseTwo.body.result.length, 2);
 });
 
 test("/api/workspace/member/invited/members/:workspace_id (a non workspace admin requesting list of invited workspace members)", async t => {
@@ -891,11 +933,9 @@ test("/api/workspace/member/search/:workspace_id", async t => {
 
   t.is(response.body.next_page, -1);
 
-  t.is(response.body.page, 1);
-
   t.is(response.body.limit, 20);
 
-  t.is(response.body.results.length, 1);
+  t.is(response.body.result.length, 1);
 });
 
 test("/api/workspace/member/info/:workspace_id/:memebr_user_id", async t => {
@@ -930,6 +970,7 @@ test("/api/workspace/member/info/:workspace_id/:memebr_user_id", async t => {
     is_admin: memberInfo.is_admin,
     is_active: memberInfo.is_active,
     last_active_at: memberInfo.last_active_at,
+    is_creator: t.context.user.id === newUser.id,
     name: `${newUser.first_name} ${newUser.last_name}`,
     joined_at: new Date(memberInfo.joined_at).toISOString()
   });

@@ -41,6 +41,7 @@ export interface WorkspaceMemberAggregation {
   is_admin: boolean;
   photo_url: string;
   is_active: boolean;
+  is_creator: boolean;
   last_active_at: string;
 }
 

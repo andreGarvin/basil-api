@@ -14,21 +14,20 @@ import * as invitation from "../../invitation/index";
 import { NO_REPLY, WEB_APP_HOST } from "../../../config";
 
 // utils
+import Pagination from "../../../common/utils/pagination";
 import ErrorResponse from "../../../common/utils/error";
 import logger from "../../../common/logger";
 import {
-  TEMPLATES,
-  sendbulkEmailTemplate
+  sendbulkEmailTemplate,
+  TEMPLATES
 } from "../../../common/utils/send-email-template";
 
 // error codes
 import InvitationError from "../../invitation/error-codes";
 import WorkspaceMemberError from "./error-codes";
-import WorkspaceError from "../error-codes";
 
 // types
 import { PaginationResults } from "../../../types";
-import { WorkspaceScopes, WorkspaceTypes } from "..";
 import {
   WorkspaceMemberAggregation,
   bulkMemberPreflightCheck,
@@ -109,7 +108,11 @@ const sendBulkWorkspaceInviteEmailNotification = async (
             workspace: {
               type: workspaceInfo.type,
               link: workspaceLink.href,
-              name: `${workspaceInfo.name} ${workspaceInfo.section}`
+              name:
+                `${workspaceInfo.name}` +
+                (workspaceInfo.section
+                  ? ` section ${workspaceInfo.section}`
+                  : "")
             },
             // the workspace admin information
             admin: {
@@ -156,20 +159,6 @@ export const updateMemberStatus = async (
   memberStatus: string
 ) => {
   try {
-    // checking if the user is a member of the workspace
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      removed: false,
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
     // updating the member's status
     const status = await workspaceMemberModel.updateOne(
       {
@@ -224,138 +213,77 @@ export const updateMemberStatus = async (
  * @param limit The number of documents to return in the pagination
  */
 export const getInvitedWorkspaceMembers = async (
-  userId: string,
   workspaceId: string,
   page: number,
   limit: number
 ): Promise<PaginationResults<PendingWorkspaceMembers>> => {
   try {
-    const workspaceInfo = await workspaceModel.findOne({ id: workspaceId });
-    if (workspaceInfo === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null || workspaceMemberInfo.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 401 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
-      }
-    }
-
-    if (!workspaceMemberInfo.is_admin) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
-        "you are not a admin therefor you con not preform this action",
-        { http_code: 401 }
-      );
-    }
-
-    // fetching all the invited members of the workspace
-    const workspaceMembers = await workspaceMemberModel
-      .aggregate([
-        // retrieving all the members of the workspace
-        {
-          $match: { workspace_id: workspaceId }
-        },
-        // joining users.id on workspace_members.user_id
-        {
-          $lookup: {
-            as: "users",
-            from: "users",
-            foreignField: "id",
-            localField: "user_id"
-          }
-        },
-        // constructing a new document
-        {
-          $project: {
-            user_id: "$user_id",
-            is_admin: "$is_admin",
-            has_account: {
-              $cond: [{ $eq: ["$users", []] }, false, true]
-            }
-          }
-        },
-        // matching all members that does not have an account
-        {
-          $match: {
-            has_account: false
-          }
-        },
-        // constructing a new document
-        {
-          $project: {
-            /* the 'user_id' of the invited member is their email,
-              the email acts as a placholder for the user when they
-              create there account */
-            email: "$user_id",
-            is_admin: "$is_admin"
-          }
-        },
-        // removing unwanted fields from the document
-        {
-          $project: {
-            _id: 0,
-            __v: 0,
-            user_id: 0,
-            has_account: 0
+    const query = [
+      // retrieving all the members of the workspace
+      {
+        $match: { workspace_id: workspaceId }
+      },
+      // joining users.id on workspace_members.user_id
+      {
+        $lookup: {
+          as: "users",
+          from: "users",
+          foreignField: "id",
+          localField: "user_id"
+        }
+      },
+      // constructing a new document
+      {
+        $project: {
+          user_id: "$user_id",
+          is_admin: "$is_admin",
+          joined_at: "$joined_at",
+          has_account: {
+            $cond: [{ $eq: ["$users", []] }, false, true]
           }
         }
-      ])
-      .limit(limit)
-      .skip(page > 0 ? (page - 1) * limit : 0);
+      },
+      // matching all members that does not have an account
+      {
+        $match: {
+          has_account: false
+        }
+      },
+      {
+        $sort: {
+          joined_at: 1
+        }
+      },
+      // constructing a new document
+      {
+        $project: {
+          /* the 'user_id' of the invited member is their email,
+        the email acts as a placholder for the user when they
+        create there account */
+          email: "$user_id",
+          is_admin: "$is_admin"
+        }
+      },
+      // removing unwanted fields from the document
+      {
+        $project: {
+          user_id: 0,
+          has_account: 0
+        }
+      }
+    ];
 
-    let nextPage = -1;
-    // getting the next page number in the pagination if there is more
-    if (workspaceMembers.length) {
-      const isMore = await workspaceMemberModel
-        .find({
-          $and: [
-            {
-              // only matching user_id that have a email as the value
-              user_id: {
-                $options: "i",
-                $regex: /@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+/
-              }
-            },
-            // not including all invited members that were returned aggregation
-            {
-              user_id: {
-                $nin: workspaceMembers.map(member => member.email)
-              }
-            }
-          ]
-        })
-        .limit(limit)
-        .skip(nextPage > 0 ? (page + 1) * limit : 0)
-        .cursor()
-        .next();
-
-      nextPage = isMore ? page + 1 : -1;
-    }
-
-    return {
+    const paginationResult = await Pagination(
+      workspaceMemberModel,
       page,
       limit,
-      next_page: nextPage,
-      results: workspaceMembers
+      query
+    );
+
+    return {
+      limit,
+      result: paginationResult.result,
+      next_page: paginationResult.next_page
     };
   } catch (err) {
     if (err instanceof Error) {
@@ -380,128 +308,88 @@ export const getInvitedWorkspaceMembers = async (
  * @param limit The number of documents to return in the pagination
  */
 export const getMembers = async (
-  userId: string,
   workspaceId: string,
   page: number,
   limit: number
 ): Promise<PaginationResults<WorkspaceMemberAggregation>> => {
   try {
     // fetching the workspace information
-    const workspaceInfo = await workspaceModel.findOne({
-      id: workspaceId
-    });
-    if (workspaceInfo === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
-    // checking if user is a member of the workspace
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null || workspaceMemberInfo.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 400 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
+    const workspaceInfo = await workspaceModel.findOne(
+      {
+        id: workspaceId
+      },
+      {
+        creator: 1
       }
-    }
+    );
 
     // retrieving all the members of the workspace
-    const workspaceMembers = await workspaceMemberModel
-      .aggregate([
-        {
-          $match: { workspace_id: workspaceId }
-        },
-        // joining users.id on workspace_members.user_id
-        {
-          $lookup: {
-            as: "users",
-            from: "users",
-            foreignField: "id",
-            localField: "user_id"
-          }
-        },
-        // seperating the 'users' field into sepeate documents
-        {
-          $unwind: "$users"
-        },
-        // constructing a new document
-        {
-          $project: {
-            status: "$status",
-            removed: "$removed",
-            user_id: "$user_id",
-            is_admin: "$is_admin",
-            email: "$users.email",
-            is_active: "$is_active",
-            joined_at: "$joined_at",
-            photo_url: "$users.photo_url",
-            last_active_at: "$last_active_at",
-            is_creator: {
-              $eq: [workspaceInfo.creator, "$user_id"]
-            },
-            name: {
-              $concat: ["$users.first_name", " ", "$users.last_name"]
-            }
-          }
-        },
-        {
-          $sort: {
-            // removed members of the bottom of the list
-            removed: 1,
-            // the creator and admin at the top of the list
-            is_admin: -1,
-            is_creator: -1
-          }
-        },
-        // removing unwanted fields from the document
-        {
-          $project: {
-            _id: 0,
-            __v: 0,
-            is_creator: 0
+    const query = [
+      {
+        $match: { workspace_id: workspaceId }
+      },
+      // joining users.id on workspace_members.user_id
+      {
+        $lookup: {
+          as: "users",
+          from: "users",
+          foreignField: "id",
+          localField: "user_id"
+        }
+      },
+      // seperating the 'users' field into sepeate documents
+      {
+        $unwind: "$users"
+      },
+      // constructing a new document
+      {
+        $project: {
+          status: "$status",
+          removed: "$removed",
+          user_id: "$user_id",
+          is_admin: "$is_admin",
+          email: "$users.email",
+          is_active: "$is_active",
+          joined_at: "$joined_at",
+          photo_url: "$users.photo_url",
+          last_active_at: "$last_active_at",
+          is_creator: {
+            $eq: [workspaceInfo.creator, "$user_id"]
+          },
+          name: {
+            $concat: ["$users.first_name", " ", "$users.last_name"]
           }
         }
-      ])
-      .limit(limit)
-      .skip(page > 0 ? (page - 1) * limit : 0);
+      },
+      {
+        $sort: {
+          // removed members of the bottom of the list
+          removed: 1,
+          // the creator and admin at the top of the list
+          is_admin: -1,
+          is_creator: -1
+        }
+      },
+      // removing unwanted fields from the document
+      {
+        $project: {
+          __v: 0,
+          is_creator: 0
+        }
+      }
+    ];
 
-    let nextPage = -1;
-    // getting the next page number in the pagination if there is more
-    if (workspaceMembers.length) {
-      const isMore = await workspaceMemberModel
-        .find({
-          // not including all the members that were returned in the pagination result
-          user_id: {
-            $nin: workspaceMembers.map(member => member.user_id)
-          }
-        })
-        .limit(limit)
-        .skip(page > 0 ? (page + 1) * limit : 0)
-        .cursor()
-        .next();
-
-      nextPage = isMore ? page + 1 : -1;
-    }
-
-    return {
+    const paginationResult = await Pagination(
+      workspaceMemberModel,
       page,
       limit,
-      next_page: nextPage,
-      results: workspaceMembers
+      query
+    );
+
+    return {
+      limit,
+      result: paginationResult.result,
+      next_page: paginationResult.next_page
     };
   } catch (err) {
     if (err instanceof Error) {
@@ -526,143 +414,101 @@ export const getMembers = async (
  * @param page The page number in the pagination
  * @param limit The number of documents to return in the pagination
  */
-export const searchForWMembers = async (
-  userId: string,
+export const searchForMembers = async (
   workspaceId: string,
   search: string,
   page?: number,
   limit?: number
 ): Promise<PaginationResults<WorkspaceMemberAggregation>> => {
   try {
-    const workspaceInfo = await workspaceModel.findOne({
-      id: workspaceId
-    });
-    if (workspaceInfo === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
-    // checking if the workspace member exist
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null || workspaceMemberInfo.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 400 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
-      }
-    }
+    const workspaceInfo = await workspaceModel.findOne(
+      {
+        id: workspaceId
+      },
+      { creator: 1 }
+    );
 
     // the regexp of the provided search
     const nameRegexpSearch: RegExp = new RegExp(`^${search}`);
 
-    // retrieving all the members that match the search string
-    const workspaceMembers = await workspaceMemberModel
-      .aggregate([
-        {
-          $match: { workspace_id: workspaceId }
-        },
-        // joining users.id on workspace_members.user_id
-        {
-          $lookup: {
-            as: "users",
-            from: "users",
-            foreignField: "id",
-            localField: "user_id"
-          }
-        },
-        // seperating the 'users' array into individual documents
-        {
-          $unwind: "$users"
-        },
-        // constructing a new document
-        {
-          $project: {
-            status: "$status",
-            removed: "$removed",
-            user_id: "$user_id",
-            is_admin: "$is_admin",
-            email: "$users.email",
-            is_active: "$is_active",
-            joined_at: "$joined_at",
-            photo_url: "$users.photo_url",
-            last_active_at: "$last_active_at",
-            is_creator: {
-              $eq: [workspaceInfo.creator, "$user_id"]
-            },
-            name: {
-              $concat: ["$users.first_name", " ", "$users.last_name"]
-            }
-          }
-        },
-        // searching the members of the workspace
-        {
-          $match: {
-            name: {
-              $options: "i",
-              $regex: nameRegexpSearch
-            }
-          }
-        },
-        // sorting the search
-        {
-          $sort: {
-            // removed memebrs are at the bottom of the list
-            removed: 1,
-            // the creator of the workspace and admins are at the top of the list
-            is_admin: -1,
-            is_creator: -1
-          }
-        },
-        // removing unwanted fields from the document
-        {
-          $project: {
-            _id: 0,
-            __v: 0,
-            is_creator: 0
+    const query = [
+      {
+        $match: { workspace_id: workspaceId }
+      },
+      // joining users.id on workspace_members.user_id
+      {
+        $lookup: {
+          as: "users",
+          from: "users",
+          foreignField: "id",
+          localField: "user_id"
+        }
+      },
+      // seperating the 'users' array into individual documents
+      {
+        $unwind: "$users"
+      },
+      // constructing a new document
+      {
+        $project: {
+          status: "$status",
+          removed: "$removed",
+          user_id: "$user_id",
+          is_admin: "$is_admin",
+          email: "$users.email",
+          is_active: "$is_active",
+          joined_at: "$joined_at",
+          photo_url: "$users.photo_url",
+          last_active_at: "$last_active_at",
+          is_creator: {
+            $eq: [workspaceInfo.creator, "$user_id"]
+          },
+          name: {
+            $concat: ["$users.first_name", " ", "$users.last_name"]
           }
         }
-      ])
-      .limit(limit)
-      .skip(page > 0 ? (page - 1) * limit : 0);
-
-    let nextPage = -1;
-    // getting the next page number in the pagination if there is more
-    if (workspaceMembers.length) {
-      const isMore = await workspaceMemberModel
-        .find({
-          user_id: {
-            // not including all the members returned in the pagination
-            $nin: workspaceMembers.map(member => member.user_id)
+      },
+      // searching the members of the workspace
+      {
+        $match: {
+          name: {
+            $options: "i",
+            $regex: nameRegexpSearch
           }
-        })
-        .limit(limit)
-        .skip(page > 0 ? (page + 1) * limit : 0)
-        .cursor()
-        .next();
+        }
+      },
+      // sorting the search
+      {
+        $sort: {
+          // removed memebrs are at the bottom of the list
+          removed: 1,
+          // the creator of the workspace and admins are at the top of the list
+          is_admin: -1,
+          is_creator: -1
+        }
+      },
+      // removing unwanted fields from the document
+      {
+        $project: {
+          _id: 0,
+          __v: 0,
+          is_creator: 0
+        }
+      }
+    ];
 
-      nextPage = isMore ? page + 1 : -1;
-    }
-
-    return {
+    const paginationResult = await Pagination(
+      workspaceMemberModel,
       page,
       limit,
+      query,
+    );
+
+    return {
+      limit,
       search,
-      next_page: nextPage,
-      results: workspaceMembers
+      result: paginationResult.result,
+      next_page: paginationResult.next_page
     };
   } catch (err) {
     if (err instanceof Error) {
@@ -700,45 +546,12 @@ export const removeMember = async (
   memberUserId: string
 ): Promise<void> => {
   try {
-    const workspaceInfo = await workspaceModel.findOne({
-      id: workspaceId
-    });
-    if (workspaceInfo === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
-    // checking if the user is a member of the workspace
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null || workspaceMemberInfo.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 400 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
-      }
-    }
-
-    if (!workspaceMemberInfo.is_admin) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
-        "you are not a admin therefor you con not preform this action",
-        { http_code: 401 }
-      );
-    }
+    const workspaceInfo = await workspaceModel.findOne(
+      {
+        id: workspaceId
+      },
+      { creator: 1 }
+    );
 
     // a admin can not remove the creator/owner of the workspace
     if (workspaceInfo.creator === memberUserId) {
@@ -786,6 +599,7 @@ export const removeMember = async (
       {
         workspace_id: workspaceId,
         user_id: {
+          // the reason for doing a regex match is because the user id might be a email
           $options: "i",
           $regex: memberUserId
         }
@@ -802,6 +616,7 @@ export const removeMember = async (
         workspace_id: workspaceId,
         user_id: memberUserId
       });
+
       logger
         .child(fields)
         .error("Internal server error, Failed to update member to be removed");
@@ -846,66 +661,9 @@ export const addMemberBulk = async (
       },
       {
         id: 1,
-        _id: 0,
-        name: 1,
-        type: 1,
-        scope: 1,
-        section: 1,
-        archived: 1,
         school_id: 1
       }
     );
-    if (workspaceInfo === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
-    if (workspaceInfo.archived) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_ARCHIVED_EXCEPTION,
-        "this workspace has been archived",
-        { http_code: 403 }
-      );
-    }
-
-    // fetching admin member information
-    const adminMember = await workspaceMemberModel.findOne(
-      {
-        removed: false,
-        user_id: userId,
-        workspace_id: workspaceId
-      },
-      {
-        _id: 0,
-        is_admin: 1
-      }
-    );
-    if (adminMember === null || adminMember.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 400 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
-      }
-    }
-
-    if (!adminMember.is_admin) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
-        "you are not a admin therefor you con not preform this action",
-        { http_code: 401 }
-      );
-    }
 
     // removing all duplicate emails from the array
     newMembers = _.uniqBy(newMembers, "email");
@@ -1100,35 +858,35 @@ export const getMemberInfo = async (
   memberUserId: string
 ): Promise<WorkspaceMemberAggregation> => {
   try {
-    // checking if the workspace exist
-    const workspaceInfo = await workspaceModel.findOne({ id: workspaceId });
-    if (workspaceInfo === null) {
+    // fetching the workspace information
+    const workspaceInfo = await workspaceModel.findOne(
+      {
+        id: workspaceId
+      },
+      {
+        creator: 1
+      }
+    );
+
+    const account = await userModel.findOne(
+      {
+        id: memberUserId
+      },
+      {
+        id: 1,
+        email: 1,
+        last_name: 1,
+        photo_url: 1,
+        first_name: 1
+      }
+    );
+    if (account === null) {
+      // if the member of the workspace does not have a account, this could be a invited user of the workspace
       throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
+        WorkspaceMemberError.WORKSPACE_MEMBER_NOT_FOUND_EXCEPTION,
+        "this workspace member does not exist",
         { http_code: 404 }
       );
-    }
-
-    // fetching the workspace member information
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null || workspaceMemberInfo.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 400 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
-      }
     }
 
     // checking if the workspace member exist
@@ -1154,26 +912,6 @@ export const getMemberInfo = async (
       );
     }
 
-    const account = await userModel.findOne(
-      {
-        id: memberUserId
-      },
-      {
-        id: 1,
-        email: 1,
-        last_name: 1,
-        photo_url: 1,
-        first_name: 1
-      }
-    );
-    if (account === null) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_NOT_FOUND_EXCEPTION,
-        "this workspace member does not exist",
-        { http_code: 404 }
-      );
-    }
-
     return {
       user_id: account.id,
       email: account.email,
@@ -1184,7 +922,8 @@ export const getMemberInfo = async (
       joined_at: memberInfo.joined_at,
       is_active: memberInfo.is_active,
       last_active_at: memberInfo.last_active_at,
-      name: `${account.first_name} ${account.last_name}`
+      name: `${account.first_name} ${account.last_name}`,
+      is_creator: workspaceInfo.creator === memberInfo.user_id
     };
   } catch (err) {
     if (err instanceof Error) {
@@ -1210,40 +949,39 @@ export const updateMemberAdminStatus = async (
   memberUserId: string
 ): Promise<boolean> => {
   try {
-    const workspaceInfo = await workspaceModel.findOne({ id: workspaceId });
-    if (workspaceInfo === null) {
+    // fetching the workspace information
+    const workspaceInfo = await workspaceModel.findOne(
+      {
+        id: workspaceId
+      },
+      {
+        creator: 1
+      }
+    );
+
+    // checking if the workspace member exist
+    const memberInfo = await workspaceMemberModel.findOne({
+      removed: false,
+      workspace_id: workspaceId,
+      // this will also target invited members as well
+      user_id: {
+        $options: "i",
+        $regex: memberUserId
+      }
+    });
+    if (memberInfo === null) {
       throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
+        WorkspaceMemberError.WORKSPACE_MEMBER_NOT_FOUND_EXCEPTION,
+        "this workspace member does not exist",
         { http_code: 404 }
       );
     }
 
-    // fetching the workspace member info
-    const workspaceMemberInfo = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMemberInfo === null || workspaceMemberInfo.removed) {
-      if (workspaceInfo.scope === WorkspaceScopes.public) {
-        throw ErrorResponse(
-          WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-          "you are not a member of this workspace",
-          { http_code: 400 }
-        );
-      } else {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
-      }
-    }
-
-    if (!workspaceMemberInfo.is_admin) {
+    // the admin can not change their own the admin permission
+    if (userId === memberUserId) {
       throw ErrorResponse(
         WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
-        "you are not a admin therefor you con not preform this action",
+        "you can not change your own admin premissions",
         {
           http_code: 401
         }
@@ -1261,42 +999,14 @@ export const updateMemberAdminStatus = async (
       );
     }
 
-    // the admin can not change their own the admin permission
-    if (userId === memberUserId) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
-        "you can not change your own admin premissions",
-        {
-          http_code: 401
-        }
-      );
-    }
-
-    // checkinf ig the workspace member exist
-    const memberInfo = await workspaceMemberModel.findOne({
-      // this will also target invited members as well
-      user_id: {
-        $options: "i",
-        $regex: memberUserId
-      },
-      workspace_id: workspaceId
-    });
-    if (memberInfo === null) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_NOT_FOUND_EXCEPTION,
-        "this workspace member does not exist",
-        { http_code: 404 }
-      );
-    }
-
     // updating the workspace member's admin permission
     const status = await workspaceMemberModel.updateOne(
       {
+        workspace_id: workspaceId,
         user_id: {
           $options: "i",
           $regex: memberUserId
-        },
-        workspace_id: workspaceId
+        }
       },
       {
         $set: {

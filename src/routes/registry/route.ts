@@ -73,11 +73,7 @@ router.get("/search", (req, res, next) => {
   };
 
   body.page = returnInt(body.page, 10, 1);
-
   body.limit = returnInt(body.limit, 10, 15);
-  if (body.limit > 15 || body.limit <= 0) {
-    body.limit = 15;
-  }
 
   const { error } = joi.validate(body, registrySearchParams);
   if (error) {
@@ -86,16 +82,6 @@ router.get("/search", (req, res, next) => {
       .json(
         ValidationJsonResponse({ errors: joiValidationResponse(error.details) })
       );
-  }
-
-  if (!body.search) {
-    return res.status(200).json({
-      results: [],
-      next_page: -1,
-      page: body.page,
-      limit: body.limit,
-      search: body.search
-    });
   }
 
   return registry

@@ -58,7 +58,10 @@ const workspaceSchema = new Schema({
   },
 
   // the workspace bio description
-  description: String,
+  description: {
+    default: "",
+    type: String
+  },
 
   // This is a relational field for the school id in the p_registry collection
   school_id: {

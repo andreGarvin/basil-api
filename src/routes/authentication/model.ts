@@ -44,7 +44,7 @@ const userSchema = new Schema({
 
   // the role of the user in the school
   role: {
-    default: InvitationRoles.STUDENT,
+    default: "student",
     required: true,
     type: String
   },

@@ -2,6 +2,9 @@ import { Document, Schema, set, model } from "mongoose";
 
 import * as uuid from "uuid/v4";
 
+// module
+import { InvitationRoles } from ".";
+
 // types
 import { Invitation } from "./types";
 
@@ -57,6 +60,7 @@ const invitationSchema = new Schema({
   /* This is field show weather the user or the service sent a user student,
     profressor, or admin invite to join */
   type: {
+    default: InvitationRoles.STUDENT,
     required: true,
     type: String
   },

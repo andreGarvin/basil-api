@@ -1,4 +1,5 @@
 // models
+import workspaceMemberRequestModel from "./request/model";
 import workspaceMemberModel from "./member/model";
 import userModel from "../authentication/model";
 import workspaceModel from "./model";
@@ -10,21 +11,21 @@ import { InvitationRoles } from "../invitation";
 import { CHARACTER_LIMIT } from "../../config";
 
 // utils
+import Pagination from "../../common/utils/pagination";
 import ErrorResponse from "../../common/utils/error";
 import logger from "../../common/logger";
 
 // error codes
 import AuthenticationError from "../authentication/error-codes";
-import WorkspaceMemberError from "./member/error-codes";
 import WorkspaceError from "./error-codes";
 
 // types
 import { PaginationResults } from "../../types";
 import {
-  NewWorkspaceInfo,
-  UpdatedWorkspaceInfo,
+  UpdateWorkspaceInfoParameters,
   AggregatedWorkspaceInfo,
-  UpdateWorkspaceInfoParameters
+  UpdatedWorkspaceInfo,
+  NewWorkspaceInfo
 } from "./types";
 
 // the different workspace types
@@ -55,7 +56,6 @@ export const getWorkspace = async (userId: string, workspaceId: string) => {
       },
       {
         id: 1,
-        _id: 0,
         name: 1,
         type: 1,
         scope: 1,
@@ -66,48 +66,20 @@ export const getWorkspace = async (userId: string, workspaceId: string) => {
         description: 1
       }
     );
-    if (workspace === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        {
-          http_code: 404
-        }
-      );
-    }
 
     // getting the user's workspace member information
-    const workspaceMember = await workspaceMemberModel.findOne({
-      user_id: userId,
-      workspace_id: workspaceId
-    });
-    if (workspaceMember === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        {
-          http_code: 404
-        }
-      );
-    } else if (workspaceMember.removed) {
-      if (workspace.scope === WorkspaceScopes.private) {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          {
-            http_code: 404
-          }
-        );
+    const workspaceMember = await workspaceMemberModel.findOne(
+      {
+        user_id: userId,
+        workspace_id: workspaceId
+      },
+      {
+        status: 1,
+        is_admin: 1,
+        is_active: 1,
+        last_active_at: 1
       }
-
-      throw ErrorResponse(
-        WorkspaceMemberError.NOT_WORKSPACE_MEMBER_EXCEPTION,
-        "you are not a member of this workspace",
-        {
-          http_code: 400
-        }
-      );
-    }
+    );
 
     // fetching the informatin of the workspace's main channel
     // const workspaceGeneralChannel = await chatModel.findOne(
@@ -151,15 +123,14 @@ export const getWorkspace = async (userId: string, workspaceId: string) => {
       // main_channel_id: workspaceGeneralChannel.id,
       // this is a field that holds the member's information related to the workspace
       meta: {
+        // the user's activity status in the workspace
+        status: workspaceMember.status,
         is_admin: workspaceMember.is_admin,
         // This is a boolean value that indicates weather the user is active in this workspace or not
         is_active: workspaceMember.is_active,
-        joined_at: workspaceMember.joined_at,
-        // the user's activity status in the workspace
-        status: workspaceMember.status,
         is_creator: workspace.creator === userId,
         last_active_at: workspaceMember.last_active_at
-        // last_chat_id: workspaceMember.last_chat_id || "",
+        // last_chat_id: workspaceMember.last_chat_id,
       }
     };
   } catch (err) {
@@ -190,7 +161,7 @@ export const getUserWorkspaces = async (userId: string) => {
       {
         $project: {
           // This holds all the member's meta information
-          workspace_id: "$workspace_id",
+          workspace_id: 1,
           meta: {
             status: "$status",
             is_admin: "$is_admin",
@@ -257,7 +228,7 @@ export const getUserWorkspaces = async (userId: string) => {
             is_creator: {
               $cond: {
                 if: {
-                  $eq: [userId, "$creator"]
+                  $eq: ["$creator", userId]
                 },
                 then: true,
                 else: false
@@ -307,8 +278,8 @@ export const getUserWorkspaces = async (userId: string) => {
       // removing unwanted fields on the documents
       {
         $project: {
-          _id: 0,
           __v: 0,
+          _id: 0,
           creator: 0
         }
       }
@@ -339,7 +310,6 @@ export const createWorkspace = async (
       // only returning the the need information
       {
         id: 1,
-        _id: 0,
         role: 1,
         school_id: 1
       }
@@ -349,23 +319,18 @@ export const createWorkspace = async (
     if (user.role === InvitationRoles.STUDENT) {
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_ROLE_PREMISSION_EXCEPTION,
-        "you do not have premission to create workspaces",
+        "you do not have premission to create a workspace",
         { http_code: 401 }
       );
     }
 
-    // setting the default 'type' if the one was not provided
+    // if the workspace type was not provided
     if (!newWorkspaceParamters.type) {
       newWorkspaceParamters.type = WorkspaceTypes.class;
     }
 
-    // setting the default 'scope' if the one was not provided
-    if (!newWorkspaceParamters.scope) {
-      newWorkspaceParamters.scope = WorkspaceScopes.private;
-    }
-
+    // the sectio fo the class needs to be sent
     if (newWorkspaceParamters.type === WorkspaceTypes.class) {
-      // setting the default 'section' if the one was not provided
       if (!newWorkspaceParamters.section) {
         throw ErrorResponse(
           WorkspaceError.WORKSPACE_SECTION_EXECPTION,
@@ -375,7 +340,7 @@ export const createWorkspace = async (
       }
     } else if (newWorkspaceParamters.type === WorkspaceTypes.club) {
       // if the workspace is a club then just set it to null
-      newWorkspaceParamters.section = null;
+      newWorkspaceParamters.section = "";
     }
 
     // checking the character length of the description
@@ -442,8 +407,8 @@ export const createWorkspace = async (
       name: newWorkspaceParamters.name,
       type: newWorkspaceParamters.type,
       scope: newWorkspaceParamters.scope,
-      section: newWorkspaceParamters.section || null,
-      description: newWorkspaceParamters.description || ""
+      section: newWorkspaceParamters.section,
+      description: newWorkspaceParamters.description
     });
 
     // inserting the new workspace info into the 'workspaces' collection
@@ -490,46 +455,47 @@ export const archiveWorkspace = async (
   workspaceId: string
 ): Promise<boolean> => {
   try {
-    // fetching the user information, only getting the user id
+    // fetching the user information
     const user = await userModel.findOne(
       { id: userId },
       {
         id: 1,
-        _id: 0,
         role: 1
       }
     );
 
+    // fetching the workspace information
     const workspace = await workspaceModel.findOne(
       {
         id: workspaceId
       },
-      { _id: 0, id: 1, archived: 1 }
-    );
-    if (workspace === null) {
-      // if the user is not a admin or the creator of the workspace
-      if (
-        user.role !== InvitationRoles.ADMIN ||
-        workspace.creator !== user.id
-      ) {
-        throw ErrorResponse(
-          WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-          "this workspace does not exist",
-          { http_code: 404 }
-        );
+      {
+        id: 1,
+        creator: 1,
+        archived: 1
       }
+    );
+
+    // if the user is a admin of the school or the workspace creator
+    const authorized =
+      user.role === InvitationRoles.ADMIN || workspace.creator === user.id;
+
+    if (!authorized) {
+      throw ErrorResponse(
+        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
+        "you are not a admin of the school or the our of this workspace",
+        { http_code: 401 }
+      );
     }
 
-    const archive: boolean = !workspace.archived;
-
-    // updating the workspace archive status
+    // archiving the workspace archive
     const status = await workspaceModel.updateOne(
       {
         id: workspace.id
       },
       {
         $set: {
-          archived: archive
+          archived: !workspace.archived
         }
       }
     );
@@ -544,7 +510,7 @@ export const archiveWorkspace = async (
       throw new Error("Failed to update the workspace to be archived");
     }
 
-    return archive;
+    return !workspace.archived;
   } catch (err) {
     if (err instanceof Error) {
       logger.child({ error: err }).error("Failed to archive the workspace");
@@ -570,12 +536,10 @@ export const updateWorkspaceInfo = async (
     // getting the workspace information
     const workspace = await workspaceModel.findOne(
       {
-        creator: userId,
         id: workspaceId
       },
       {
         id: 1,
-        _id: 0,
         name: 1,
         type: 1,
         scope: 1,
@@ -585,21 +549,6 @@ export const updateWorkspaceInfo = async (
         description: 1
       }
     );
-    if (workspace === null) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
-        "this workspace does not exist",
-        { http_code: 404 }
-      );
-    }
-
-    if (workspace.archived) {
-      throw ErrorResponse(
-        WorkspaceError.WORKSPACE_ARCHIVED_EXCEPTION,
-        "this workspace has been archived",
-        { http_code: 403 }
-      );
-    }
 
     // the workspace information that will be updated
     const workspaceInfo = {
@@ -667,7 +616,9 @@ export const updateWorkspaceInfo = async (
         id: workspace.id,
         creator: userId
       },
-      { $set: workspaceInfo }
+      {
+        $set: workspaceInfo
+      }
     );
 
     if (status.n === 0) {
@@ -697,7 +648,8 @@ export const updateWorkspaceInfo = async (
 };
 
 /**
- *  pgaination search result of the workspaces stored in the workspaces collecition.
+ * This function returns a pgaination search result of the workspaces stored
+ * in the workspaces collecition.
  *
  * @param userId The user id
  * @param search The search text
@@ -714,145 +666,157 @@ export const searchForWorkspaces = async (
     const user = await userModel.findOne(
       { id: userId },
       {
-        id: 1,
-        _id: 0,
         school_id: 1
       }
     );
 
-    // gathering all the workspace ids the user is a member in
-    const userWorkspaces = (await workspaceMemberModel.find({
-      removed: false,
+    // gathering all the workspace the user is a member in
+    const workspaceIds = (await workspaceMemberModel.find(
+      {
+        removed: false,
+        user_id: userId
+      },
+      {
+        workspace_id: 1
+      }
+    )).map(memberInfo => memberInfo.workspace_id);
+
+    // gathering all the workspace member request the user has sent
+    const memberRequestWorkspaceIds = (await workspaceMemberRequestModel.find({
       user_id: userId
-    })).map(memberInfo => memberInfo.workspace_id);
+    })).map(memberRequestInfo => memberRequestInfo.workspace_id);
 
     // creating a regex for the search
     const regexpNameSearch: RegExp = new RegExp(`^${search}`);
 
-    const workspaces = await workspaceModel
-      .aggregate([
-        {
-          $match: {
-            archived: false,
-            school_id: user.school_id,
-            name: {
-              $options: "i",
-              $regex: regexpNameSearch
-            }
-          }
-        },
-        {
-          $project: {
-            id: 1,
-            name: 1,
-            type: 1,
-            scope: 1,
-            section: 1,
-            creator: 1,
-            created_at: 1,
-            description: 1,
-            meta: {
-              is_member: {
-                $cond: [
-                  {
-                    $in: ["$id", userWorkspaces]
-                  },
-                  true,
-                  false
-                ]
-              }
-            }
-          }
-        },
-        {
-          $match: {
-            $or: [
-              {
-                "meta.is_member": true,
-                scope: WorkspaceScopes.private
-              },
-              {
-                scope: WorkspaceScopes.public
-              }
-            ]
-          }
-        },
-        {
-          $lookup: {
-            from: "users",
-            foreignField: "id",
-            as: "creator_info",
-            localField: "creator"
-          }
-        },
-        {
-          $unwind: {
-            path: "$creator_info"
-          }
-        },
-        {
-          $project: {
-            id: 1,
-            meta: 1,
-            name: 1,
-            type: 1,
-            scope: 1,
-            section: 1,
-            archived: 1,
-            created_at: 1,
-            description: 1,
-            creator: {
-              email: "$creator_info.email",
-              photo_url: "$creator_info.photo_url",
-              name: {
-                $concat: [
-                  "$creator_info.first_name",
-                  " ",
-                  "$creator_info.last_name"
-                ]
-              }
-            }
-          }
-        },
-        {
-          $project: {
-            _id: 0,
-            __v: 0,
-            creator_info: 0
-          }
-        }
-      ])
-      .limit(limit)
-      .skip(page > 0 ? (page - 1) * limit : 0);
-
-    // the number of the nextPage
-    let nextPage = -1;
-    if (workspaces.length) {
-      // checking if there is more in the pagination cursor
-      const isMore: boolean = await workspaceModel
-        .find({
-          id: {
-            $nin: workspaces.map(workspace => workspace.id)
-          },
+    const query = [
+      {
+        $match: {
+          archived: false,
+          school_id: user.school_id,
           name: {
             $options: "i",
             $regex: regexpNameSearch
           }
-        })
-        .limit(limit)
-        .skip(nextPage > 0 ? (nextPage - 1) * limit : 0)
-        .cursor()
-        .next();
+        }
+      },
+      {
+        $project: {
+          id: 1,
+          name: 1,
+          type: 1,
+          scope: 1,
+          section: 1,
+          creator: 1,
+          created_at: 1,
+          description: 1,
+          meta: {
+            sent_request: {
+              $cond: [
+                {
+                  $in: ["$id", memberRequestWorkspaceIds]
+                },
+                true,
+                false
+              ]
+            },
+            is_member: {
+              $cond: [
+                {
+                  $in: ["$id", workspaceIds]
+                },
+                true,
+                false
+              ]
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          $or: [
+            // if the user is a member of the private workspace
+            {
+              "meta.is_member": true,
+              scope: WorkspaceScopes.private
+            },
+            // any workspace that is public the user may or may not be a member of
+            {
+              scope: WorkspaceScopes.public
+            }
+          ]
+        }
+      },
+      {
+        $lookup: {
+          from: "users",
+          foreignField: "id",
+          as: "creator_info",
+          localField: "creator"
+        }
+      },
+      {
+        $unwind: "$creator_info"
+      },
+      {
+        $lookup: {
+          localField: "id",
+          as: "workspace_members",
+          from: "workspace_members",
+          foreignField: "workspace_id"
+        }
+      },
+      {
+        $project: {
+          id: 1,
+          meta: 1,
+          name: 1,
+          type: 1,
+          scope: 1,
+          section: 1,
+          archived: 1,
+          created_at: 1,
+          description: 1,
+          member_count: {
+            $size: {
+              $filter: {
+                input: "$workspace_members",
+                as: "workspace_member",
+                cond: {
+                  $eq: ["$$workspace_member.removed", false]
+                }
+              }
+            }
+          },
+          creator_name: {
+            $concat: [
+              "$creator_info.first_name",
+              " ",
+              "$creator_info.last_name"
+            ]
+          }
+        }
+      },
+      {
+        $project: {
+          creator: 0,
+          creator_info: 0
+        }
+      }
+    ];
 
-      nextPage = isMore ? page + 1 : -1;
-    }
-
-    return {
+    const paginationResult = await Pagination(
+      workspaceModel,
       page,
       limit,
+      query
+    );
+
+    return {
+      limit,
       search,
-      next_page: nextPage,
-      results: workspaces
+      result: paginationResult.result,
+      next_page: paginationResult.next_page
     };
   } catch (err) {
     logger

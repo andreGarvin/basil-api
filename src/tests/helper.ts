@@ -7,6 +7,7 @@ import * as uuid from "uuid/v4";
 import * as faker from "faker";
 
 // models
+import workspaceMemberRequestModel from "../routes/workspace/request/model";
 import workspaceMemberModel from "../routes/workspace/member/model";
 import invitationModel from "../routes/invitation/model";
 import workspaceModel from "../routes/workspace/model";
@@ -19,6 +20,7 @@ import { InvitationRoles } from "../routes/invitation";
 
 // config
 import {
+  APP_NAME,
   TOKEN_SECRET,
   CHARACTER_LIMIT,
   USER_TOKEN_EXPIRATION
@@ -33,6 +35,7 @@ import { Workspace } from "../routes/workspace/types";
 
 // utils
 import logger from "../common/logger";
+import { WorkspaceMemberRequest } from "../routes/workspace/request/types";
 
 export interface MockUserInfo {
   school_name: string;
@@ -149,8 +152,8 @@ export const createInvitation = async (email, role, schoolId) => {
     const newInvitation = new invitationModel({
       email,
       type: role,
+      from: APP_NAME,
       school_id: schoolId,
-      from: process.env.APP_NAME,
       expires_at: dateFn.addDays(new Date(), 7).toISOString()
     });
 
@@ -344,6 +347,27 @@ export const createWorkspaceMember = async (
   }
 };
 
+export const createRequest = async (userId: string, workspaceId: string) => {
+  try {
+    const newWorkspaceMemberRequest = new workspaceMemberRequestModel({
+      user_id: userId,
+      workspace_id: workspaceId
+    });
+
+    await newWorkspaceMemberRequest.save();
+
+    return newWorkspaceMemberRequest.toJSON();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into workspace_members collection"
+      );
+
+    throw err;
+  }
+};
+
 // find
 export const findInvitationById = async (
   invitationId: string
@@ -370,6 +394,28 @@ export const findWorkspaceById = async (
     const workspace = await workspaceModel.findOne({ id: workspaceId });
 
     return workspace ? workspace.toJSON() : workspace;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from workspaces collection"
+      );
+  }
+};
+
+export const findworkspaceMemberRequest = async (
+  userId,
+  workspaceId
+): Promise<WorkspaceMemberRequest> => {
+  try {
+    const workspaceMemberRequest = await workspaceMemberRequestModel.findOne({
+      user_id: userId,
+      workspace_id: workspaceId
+    });
+
+    return workspaceMemberRequest
+      ? workspaceMemberRequest.toJSON()
+      : workspaceMemberRequest;
   } catch (err) {
     logger
       .child({ error: err })
@@ -724,6 +770,20 @@ export const clearUsers = async () => {
       .child({ error: err })
       .error(
         "Test helper function failed delete all mock data form users collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearWorkspaceMemberRequests = async () => {
+  try {
+    await workspaceMemberRequestModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete all mock data form workspace_member_requests collection"
       );
 
     throw err;

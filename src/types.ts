@@ -5,9 +5,8 @@ export interface State {
 
 // this is the interface for all json pagination responses on the api
 export interface PaginationResults<T> {
-  page: number;
   limit: number;
+  result: T[];
   search?: string;
-  results: any[];
   next_page: number;
 }

@@ -1,8 +1,5 @@
 import * as express from "express";
 
-// utils
-import logger from "../../common/logger";
-
 // error codes
 import { INTERNAL_SERVER_ERROR } from "../../common/error-codes";
 

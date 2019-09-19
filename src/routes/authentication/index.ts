@@ -11,6 +11,9 @@ import invitationModel from "../invitation/model";
 import registryModel from "../registry/model";
 import userModel from "./model";
 
+// module
+import { InvitationRoles } from "../invitation";
+
 // config
 import {
   NO_REPLY,
@@ -35,7 +38,6 @@ import TokenError from "./token/error-codes";
 
 // types
 import { NewUserInfo, AccountCredentials } from "./types";
-import { InvitationRoles } from "../invitation";
 
 const AVATAR_PHOTO_URL = "https://www.gravatar.com/avatar";
 
@@ -121,7 +123,6 @@ export const authenticate = async (
       // only returning the information that was needed
       {
         id: 1,
-        _id: 0,
         role: 1,
         hash: 1,
         token: 1,
@@ -442,10 +443,7 @@ export const updatePassword = async (
 ): Promise<void> => {
   try {
     // checking if user account exist
-    const account = await userModel.findOne(
-      { id: userId },
-      { _id: 0, hash: 1 }
-    );
+    const account = await userModel.findOne({ id: userId }, { hash: 1 });
     if (account === null) {
       logger.error("Internal server error, user account was not found");
 
@@ -533,7 +531,7 @@ export const resetPassword = async (
         },
         school_id: decoedToken.school_id
       },
-      { _id: 0, id: 1, hash: 1, deactivated: 1 }
+      { id: 1, hash: 1, deactivated: 1 }
     );
     if (account === null) {
       logger
