@@ -33,6 +33,17 @@ const getWorkspace = async (
   return workspaceInfo;
 };
 
+/**
+ * This middleware checks if the workspace exist, but also checks
+ * if the workspace has been archived as well
+ *
+ * #TODO: This function needs to be refactored at a later point,
+ * particularly when checking if the workspace has been archived.
+ * For a user that is not a member of the private workspace that
+ * has been archived will know if its existence
+ *
+ * @param isArchived Check if the workspace is archived
+ */
 export default (isArchived?: boolean) => {
   return (
     req: express.Request,

@@ -226,13 +226,7 @@ export const getUserWorkspaces = async (userId: string) => {
             last_active_at: 1,
             // conditional checking if the user is the same as the 'workspace.creator' user id
             is_creator: {
-              $cond: {
-                if: {
-                  $eq: ["$creator", userId]
-                },
-                then: true,
-                else: false
-              }
+              $eq: ["$creator", userId]
             }
           }
         }

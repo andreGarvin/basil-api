@@ -39,7 +39,7 @@ test.beforeEach(async t => {
   const mockUser = db.createMockUserInfo(
     generatedSchool.name,
     generatedSchool.domain,
-    "professor"
+    InvitationRoles.PROFESSOR
   );
 
   const newUser = await db.createUser(

@@ -239,6 +239,7 @@ export const getInvitedWorkspaceMembers = async (
           is_admin: "$is_admin",
           joined_at: "$joined_at",
           has_account: {
+            // if the user has does not have a account tied to the user id
             $cond: [{ $eq: ["$users", []] }, false, true]
           }
         }
@@ -354,7 +355,7 @@ export const getMembers = async (
           photo_url: "$users.photo_url",
           last_active_at: "$last_active_at",
           is_creator: {
-            $eq: [workspaceInfo.creator, "$user_id"]
+            $eq: ["$user_id", workspaceInfo.creator]
           },
           name: {
             $concat: ["$users.first_name", " ", "$users.last_name"]
@@ -461,7 +462,7 @@ export const searchForMembers = async (
           photo_url: "$users.photo_url",
           last_active_at: "$last_active_at",
           is_creator: {
-            $eq: [workspaceInfo.creator, "$user_id"]
+            $eq: ["$user_id", workspaceInfo.creator]
           },
           name: {
             $concat: ["$users.first_name", " ", "$users.last_name"]
@@ -501,7 +502,7 @@ export const searchForMembers = async (
       workspaceMemberModel,
       page,
       limit,
-      query,
+      query
     );
 
     return {

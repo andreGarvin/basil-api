@@ -8,11 +8,16 @@ import * as faker from "faker";
 
 // models
 import workspaceMemberRequestModel from "../routes/workspace/request/model";
+import directMessageModel from "../routes/messenger/models/direct-message";
 import workspaceMemberModel from "../routes/workspace/member/model";
+import groupModel from "../routes/messenger/models/group";
 import invitationModel from "../routes/invitation/model";
 import workspaceModel from "../routes/workspace/model";
 import userModel from "../routes/authentication/model";
 import registryModel from "../routes/registry/model";
+
+// utils
+import logger from "../common/logger";
 
 // module enums
 import { WorkspaceTypes, WorkspaceScopes } from "../routes/workspace";
@@ -27,15 +32,13 @@ import {
 } from "../config";
 
 // types
+import { WorkspaceMemberRequest } from "../routes/workspace/request/types";
 import { WorkspaceMember } from "../routes/workspace/member/types";
+import { Group, DirectMessage } from "../routes/messenger/types";
 import { UserAccount } from "../routes/authentication/types";
 import { RegistratedSchool } from "../routes/registry/types";
 import { Invitation } from "../routes/invitation/types";
 import { Workspace } from "../routes/workspace/types";
-
-// utils
-import logger from "../common/logger";
-import { WorkspaceMemberRequest } from "../routes/workspace/request/types";
 
 export interface MockUserInfo {
   school_name: string;
@@ -120,6 +123,28 @@ export const generateRandomUserEmails = (count: number): string[] => {
   }
 
   return emails;
+};
+
+interface NewGroupInfo {
+  name: string;
+  archived?: boolean;
+  description?: string;
+  is_channel?: boolean;
+  is_private?: boolean;
+}
+export const createMockGroupInfo = (): NewGroupInfo => {
+  const [name] = faker.company.companyName(0).split(" ");
+  const description = faker.lorem
+    .words(CHARACTER_LIMIT)
+    .slice(0, CHARACTER_LIMIT);
+
+  return {
+    description,
+    archived: false,
+    is_private: false,
+    is_channel: false,
+    name: name.toLowerCase()
+  };
 };
 
 // insert
@@ -207,6 +232,36 @@ export const createWorkspace = async (
     await newMember.save();
 
     return newWorkspace.toJSON();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into workspaces collection"
+      );
+
+    throw err;
+  }
+};
+
+export const createGroup = async (
+  userId: string,
+  workspaceId: string,
+  groupInfo: NewGroupInfo
+): Promise<Group> => {
+  try {
+    const newGroup = new groupModel({
+      creator: userId,
+      name: groupInfo.name,
+      workspace_id: workspaceId,
+      archived: groupInfo.archived,
+      is_channel: groupInfo.is_channel,
+      is_private: groupInfo.is_private,
+      description: groupInfo.description
+    });
+
+    await newGroup.save();
+
+    return newGroup.toJSON();
   } catch (err) {
     logger
       .child({ error: err })
@@ -315,6 +370,30 @@ export const createUser = async (
   }
 };
 
+export const createDirectMessage = async (
+  workspaceId: string,
+  members: string[]
+): Promise<DirectMessage> => {
+  try {
+    const newDirectMessage = new directMessageModel({
+      members,
+      workspace_id: workspaceId
+    });
+
+    await newDirectMessage.save();
+
+    return newDirectMessage.toJSON();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into direct_messages collection"
+      );
+
+    throw err;
+  }
+};
+
 interface NewMemberInfo {
   removed?: boolean;
   is_admin?: boolean;
@@ -403,9 +482,23 @@ export const findWorkspaceById = async (
   }
 };
 
+export const findGroupById = async (groupId: string): Promise<Group> => {
+  try {
+    const group = await groupModel.findOne({ id: groupId });
+
+    return group ? group.toJSON() : group;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from direct_messages collection"
+      );
+  }
+};
+
 export const findworkspaceMemberRequest = async (
-  userId,
-  workspaceId
+  userId: string,
+  workspaceId: string
 ): Promise<WorkspaceMemberRequest> => {
   try {
     const workspaceMemberRequest = await workspaceMemberRequestModel.findOne({
@@ -497,6 +590,24 @@ export const findWorkspaceMemberByUserId = async (
       .child({ error: err })
       .error(
         "Test helper function failed to return document from workspace_member collection"
+      );
+  }
+};
+
+export const findDirectMessageById = async (
+  directMessageId: string
+): Promise<DirectMessage> => {
+  try {
+    const directMessage = await directMessageModel.findOne({
+      id: directMessageId
+    });
+
+    return directMessage ? directMessage.toJSON() : directMessage;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from direct_messages collection"
       );
   }
 };
@@ -686,6 +797,34 @@ export const deleteMemberfromWorkspaceByUserId = async (
       .child({ error: err })
       .error(
         "Test helper function failed delete invitation mock data form workspace_members collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearGroups = async () => {
+  try {
+    await groupModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete groups mock data form groups collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearDirectMessages = async () => {
+  try {
+    await directMessageModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete direct messages mock data form direct_messages collection"
       );
 
     throw err;
