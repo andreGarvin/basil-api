@@ -14,9 +14,9 @@ import joiValidateResponse from "../../../common/utils/joi-validate-response";
 import returnInt from "../../../common/utils/return-int";
 
 // middleware
+import isWorkspaceArchivedMiddleware from "../middleware/is-workspace-archived";
+import isWorkspaceMemberMiddleware from "./middleware/is-workspace-member";
 import roasterCsvParser from "./middleware/csv-workspace-member-parser";
-import isWorkspaceMember from "./middleware/workspace-member";
-import workspaceExist from "../middleware/workspace-exist";
 import multerUploadMiddlware from "./middleware/multer";
 
 // request schemas
@@ -60,8 +60,8 @@ const csvUploadPipelineMiddleware = (req, res, next) => {
 
 router.post(
   "/bulk/:workspace_id",
-  workspaceExist(true),
-  isWorkspaceMember(true),
+  isWorkspaceMemberMiddleware(true),
+  isWorkspaceArchivedMiddleware(),
   csvUploadPipelineMiddleware,
   (req, res, next) => {
     const { error } = joi.validate(req.body, addMemberBulkSchema, {
@@ -84,8 +84,7 @@ router.post(
 
 router.get(
   "/invited/members/:workspace_id",
-  workspaceExist(true),
-  isWorkspaceMember(true),
+  isWorkspaceMemberMiddleware(true),
   (req, res, next) => {
     const body = {
       page: req.query.page,
@@ -117,8 +116,7 @@ router.get(
 
 router.get(
   "/members/:workspace_id",
-  workspaceExist(true),
-  isWorkspaceMember(),
+  isWorkspaceMemberMiddleware(),
   (req, res, next) => {
     const body = {
       page: req.query.page,
@@ -146,8 +144,7 @@ router.get(
 
 router.get(
   "/search/:workspace_id",
-  workspaceExist(true),
-  isWorkspaceMember(),
+  isWorkspaceMemberMiddleware(),
   (req, res, next) => {
     const body = {
       page: req.query.page,
@@ -181,8 +178,7 @@ router.get(
 
 router.get(
   "/info/:workspace_id/:member_user_id",
-  workspaceExist(true),
-  isWorkspaceMember(),
+  isWorkspaceMemberMiddleware(),
   (req, res, next) => {
     return workspaceMember
       .getMemberInfo(
@@ -197,8 +193,8 @@ router.get(
 
 router.put(
   "/admin/:workspace_id/:member_user_id",
-  workspaceExist(true),
-  isWorkspaceMember(true),
+  isWorkspaceMemberMiddleware(true),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     return workspaceMember
       .updateMemberAdminStatus(
@@ -213,8 +209,8 @@ router.put(
 
 router.patch(
   "/info/:workspace_id",
-  workspaceExist(true),
-  isWorkspaceMember(),
+  isWorkspaceMemberMiddleware(),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, updateMemberStatusSchema, {
       abortEarly: false
@@ -242,8 +238,8 @@ router.patch(
 
 router.delete(
   "/remove/:workspace_id/:member_user_id",
-  workspaceExist(true),
-  isWorkspaceMember(true),
+  isWorkspaceMemberMiddleware(true),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     return workspaceMember
       .removeMember(

@@ -30,6 +30,7 @@ export interface AggregatedWorkspaceInfo {
   archived: boolean;
   created_at: string;
   description: string;
+  main_channel_id: string;
 }
 
 interface MetaField {

@@ -23,6 +23,15 @@ const getWorkspaceMemberInfo = async (
       creator: 1
     }
   );
+  if (workspaceInfo === null) {
+    throw ErrorResponse(
+      WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
+      "this workspace does not exist",
+      {
+        http_code: 404
+      }
+    );
+  }
 
   const workspaceMemberInfo = await workspaceMemberModel.findOne(
     {

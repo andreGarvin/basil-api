@@ -6,7 +6,6 @@ interface Chat {
 }
 
 export interface DirectMessage extends Chat {
-  members: string[];
   is_direct_message?: boolean;
 }
 
@@ -18,28 +17,46 @@ export interface Group extends Chat {
   description: string;
 }
 
+export interface Meta {
+  is_admin: boolean;
+  is_creator: boolean;
+}
+
 export interface GroupSearchResult extends Chat {
+  meta: Meta;
   name: string;
   is_private: boolean;
   is_channel: boolean;
   description: string;
-  meta: {
-    is_creator: boolean;
+}
+
+export interface AggregatedGroupInfo extends Group {
+  meta: Meta;
+}
+
+export interface AggregatedDirectMessageInfo extends DirectMessage {
+  member: {
+    name: string;
+    email: string;
+    status: string;
+    photo_url: string;
+    is_active: boolean;
+    is_workspace_admin: boolean;
   };
 }
 
-// interface AggregatedChat {
+// export interface AggregatedChat {
 //   id: string;
 //   name?: string;
 //   creator?: string;
 //   archived: boolean;
 //   created_at: string;
-//   is_private?: boolean;
 //   is_channel: boolean;
+//   is_private?: boolean;
 //   description?: string;
 //   workspace_id: string;
 //   is_direct_message: boolean;
-//   mea: {
+//   meta: {
 //     is_member: boolean;
 //     last_read_since: string;
 //   };

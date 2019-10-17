@@ -3,11 +3,13 @@ import { URL } from "url";
 import * as _ from "lodash";
 
 // models
+import groupModel from "../../messenger/models/group";
 import userModel from "../../authentication/model";
 import workspaceMemberModel from "./model";
 import workspaceModel from "../model";
 
 // modules
+import * as messengerMember from "../../messenger/member/index";
 import * as invitation from "../../invitation/index";
 
 // config
@@ -27,6 +29,7 @@ import InvitationError from "../../invitation/error-codes";
 import WorkspaceMemberError from "./error-codes";
 
 // types
+import { DEFAULT_MAIN_CHANNEL_NAME } from "../../messenger";
 import { PaginationResults } from "../../../types";
 import {
   WorkspaceMemberAggregation,
@@ -35,6 +38,7 @@ import {
   PendingWorkspaceMembers,
   NewMember
 } from "./types";
+import WorkspaceError from "../error-codes";
 
 // workspace member activity status
 export enum WorkspaceMemberStatus {
@@ -77,11 +81,21 @@ const sendBulkWorkspaceInviteEmailNotification = async (
       }
     );
 
+    const mainWorkspaceChannel = await groupModel.findOne(
+      {
+        is_channel: true,
+        workspace_id: workspaceId,
+        name: DEFAULT_MAIN_CHANNEL_NAME
+      },
+      {
+        id: 1
+      }
+    );
+
     // constructing the url for the workspace
     const workspaceLink = new URL(WEB_APP_HOST);
     workspaceLink.protocol = process.env.IS_DOCKER ? "https" : "http";
-    // #TODO: Later add the main general channel id for the workspace
-    workspaceLink.pathname = `/messenger/${workspaceId}`;
+    workspaceLink.pathname = `/messenger/${workspaceId}/${mainWorkspaceChannel.id}`;
 
     // mapping over all the new members and creating contructing object to pass to the sendBlukTemplate function
     const emailTemplateObjects = await Promise.all(
@@ -178,11 +192,7 @@ export const updateMemberStatus = async (
         workspace_id: workspaceId
       });
 
-      logger
-        .child(fields)
-        .error(
-          "Internal server error, failed to update workspace member status"
-        );
+      logger.child(fields).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to update workspace member status"
@@ -303,6 +313,8 @@ export const getInvitedWorkspaceMembers = async (
  * This function returns a pagination of the members in the workspace, but does not preform searching
  * on the workspace_members collection
  *
+ * #TODO: Add 'direct_message_id' field to the member search result
+ *
  * @param userId The user id of the workspace member
  * @param workspaceId The id of the workspace
  * @param page The page number in the pagination
@@ -408,6 +420,8 @@ export const getMembers = async (
 /**
  * This function searches through the workspace_members collection by the name of a member
  * and returnns a pagination of the workspace members
+ *
+ * #TODO: Add 'direct_message_id' field to the member search result
  *
  * @param userId The user id of the workspace memeber
  * @param workspaceId The id of the workspace
@@ -533,9 +547,10 @@ export const searchForMembers = async (
  * is invital for the person when creating their account and assigning their
  * account role.
  *
- * #FYI: If you are also wondering why this does not permentally delete the document
- * this is for data persitance and also this document has a one to many relation. This
- * would break the application and all data referencing this document
+ * #FYI: If you are also wondering why this does not delete the data of workspaces
+ * members who have accounts permentally. this is for data persitance and these member
+ * probably created a data footprint in the workspace, by deleting the data this would
+ * break the application because of the one to many relations
  *
  * @param userId The user id of the workspace admin
  * @param workspaceId The id of the workspace
@@ -551,7 +566,9 @@ export const removeMember = async (
       {
         id: workspaceId
       },
-      { creator: 1 }
+      {
+        creator: 1
+      }
     );
 
     // a admin can not remove the creator/owner of the workspace
@@ -595,15 +612,28 @@ export const removeMember = async (
       );
     }
 
-    // updating the member to be 'removed' from the workspace
-    const status = await workspaceMemberModel.updateOne(
-      {
+    // checking if the member has a account
+    const userAccount = await userModel.findOne({
+      id: memberUserId
+    });
+    if (!userAccount) {
+      // prementally deleting the document of the member from the workspace
+      await workspaceMemberModel.deleteOne({
         workspace_id: workspaceId,
         user_id: {
           // the reason for doing a regex match is because the user id might be a email
           $options: "i",
           $regex: memberUserId
         }
+      });
+      return;
+    }
+
+    // updating the workspace member to be 'removed' from the workspace
+    const updateWorkspaceMemberStatus = await workspaceMemberModel.updateOne(
+      {
+        user_id: memberUserId,
+        workspace_id: workspaceId
       },
       {
         $set: {
@@ -612,20 +642,26 @@ export const removeMember = async (
       }
     );
 
-    if (status.n === 0) {
-      const fields = Object.assign({}, status, {
+    if (updateWorkspaceMemberStatus.n === 0) {
+      const fields = Object.assign({}, updateWorkspaceMemberStatus, {
         workspace_id: workspaceId,
         user_id: memberUserId
       });
 
-      logger
-        .child(fields)
-        .error("Internal server error, Failed to update member to be removed");
+      logger.child(fields).debug("debugging update query");
 
       throw new Error(
-        "Internal server error, Failed to update member to be removed"
+        "Internal server error, Failed to update workspace member to be removed"
       );
     }
+
+    // cascading this action to other relational part of the workspace
+    await messengerMember.removeMemberFromAllGroups(workspaceId, memberUserId);
+    await messengerMember.archiveAllMemberDirectMessages(
+      workspaceId,
+      memberUserId,
+      true
+    );
   } catch (err) {
     if (err instanceof Error) {
       logger
@@ -761,8 +797,8 @@ export const addMemberBulk = async (
             invitedMember.error_code !==
               InvitationError.INVITATION_EXIST_EXCEPTION
           ) {
-            member.invited = false;
             member.error_code = invitedMember.error_code;
+            member.invited = false;
           } else {
             member.added = true;
           }
@@ -795,28 +831,36 @@ export const addMemberBulk = async (
       member => member.unremove
     );
     if (unRemovedMembers.length) {
-      bulkMembersResponse = await Promise.all(
-        unRemovedMembers.map(async member => {
-          await workspaceMemberModel.updateOne(
-            {
-              user_id: member.user_id,
-              workspace_id: workspaceInfo.id
-            },
-            {
-              $set: {
-                removed: false,
-                is_admin: member.is_admin
-              }
+      for (let member of unRemovedMembers) {
+        await workspaceMemberModel.updateOne(
+          {
+            user_id: member.user_id,
+            workspace_id: workspaceInfo.id
+          },
+          {
+            $set: {
+              removed: false,
+              is_admin: member.is_admin
             }
-          );
+          }
+        );
 
+        await messengerMember.unRemoveMemberFromAllGroups(
+          workspaceId,
+          member.user_id
+        );
+      }
+
+      bulkMembersResponse = bulkMembersResponse.map(member => {
+        if (member.unremove) {
           delete member.unremove;
           delete member.user_id;
 
           member.added = true;
-          return member;
-        })
-      );
+        }
+
+        return member;
+      });
     }
 
     // sending a batch of email notifications to the new workspace member
@@ -848,6 +892,8 @@ export const addMemberBulk = async (
 /**
  * This function returns a aggregation of workspace member information from the
  * workspace_members collection
+ *
+ * #TODO: attach the direct message id to the workspace member info
  *
  * @param userId The user id of the workspace member
  * @param workspaceId The id of the workspace
@@ -1022,9 +1068,7 @@ export const updateMemberAdminStatus = async (
         workspace_id: workspaceId
       });
 
-      logger
-        .child(fields)
-        .error("Internal server error, failed to update the user admin status");
+      logger.child(fields).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to update the user admin status"

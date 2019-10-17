@@ -122,14 +122,28 @@ export const saveMemberRequest = async (
         name: 1,
         type: 1,
         scope: 1,
-        section: 1
+        section: 1,
+        archived: 1
       }
     );
-    if (workspaceInfo.scope === WorkspaceScopes.private) {
+    if (
+      workspaceInfo === null ||
+      workspaceInfo.scope === WorkspaceScopes.private
+    ) {
       throw ErrorResponse(
         WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
         "this workspace does not exits",
         { http_code: 404 }
+      );
+    }
+
+    if (workspaceInfo.archived) {
+      throw ErrorResponse(
+        WorkspaceError.WORKSPACE_ARCHIVED_EXCEPTION,
+        "this workspace has been archived",
+        {
+          http_code: 403
+        }
       );
     }
 
@@ -365,11 +379,7 @@ export const acceptMemberRequest = async (
         workspace_id: workspaceId
       });
 
-      logger
-        .child(fields)
-        .error(
-          "Internal server error, failed to delete user workspace request from the workspace_member_requests collection"
-        );
+      logger.child(fields).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to delete user workspace request from the workspace_member_requests collection"

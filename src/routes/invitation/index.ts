@@ -644,7 +644,7 @@ export const deleteInvitation = async (
     } else if (status.n === 0) {
       logger
         .child(status)
-        .error("Failed to delete invitation from invitations collections");
+        .warn("Failed to delete invitation from invitations collections");
     }
   } catch (err) {
     if (err instanceof Error) {
@@ -716,11 +716,8 @@ export const updateInvitation = async (
         }
       }
     );
-    if (status.n === 0) {
-      logger.error(
-        "Internal server error, Failed to update the invitation type in invitations collection"
-      );
 
+    if (status.n === 0) {
       throw new Error(
         "Internal server error, Failed to update the invitation type in invitations collection"
       );

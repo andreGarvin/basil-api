@@ -13,9 +13,10 @@ import { ValidationJsonResponse } from "../../config";
 import joiValidateResponse from "../../common/utils/joi-validate-response";
 
 // middleware
-import isWorkspaceMemberMiddleware from "../workspace/member/middleware/workspace-member";
+import isWorkspaceMemberMiddleware from "../workspace/member/middleware/is-workspace-member";
+import isWorkspaceArchivedMiddleware from "../workspace/middleware/is-workspace-archived";
 import authenticationMiddleware from "../authentication/middleware/authentication";
-import workspaceExistMiddleware from "../workspace/middleware/workspace-exist";
+import isGroupMember from "./member/middlewre/is-group-member";
 
 // reqyest schemas
 import {
@@ -31,8 +32,8 @@ router.use(authenticationMiddleware);
 // direct message
 router.post(
   "/direct-message/create/:workspace_id",
-  workspaceExistMiddleware(true),
   isWorkspaceMemberMiddleware(),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, newDirectMessageSchema, {
       abortEarly: false
@@ -59,8 +60,8 @@ router.post(
 // channel
 router.post(
   "/channel/create/:workspace_id",
-  workspaceExistMiddleware(true),
   isWorkspaceMemberMiddleware(true),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, newChannelSchema, {
       abortEarly: false
@@ -88,8 +89,8 @@ router.post(
 // group
 router.post(
   "/group/create/:workspace_id",
-  workspaceExistMiddleware(true),
   isWorkspaceMemberMiddleware(),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, newGroupSchema, {
       abortEarly: false
@@ -117,7 +118,6 @@ router.post(
 
 router.get(
   "/search/:workspace_id",
-  workspaceExistMiddleware(true),
   isWorkspaceMemberMiddleware(),
   (req, res, next) => {
     const body = {
@@ -155,8 +155,8 @@ router.get(
 
 router.get(
   "/feeling-lucky/:workspace_id",
-  workspaceExistMiddleware(true),
   isWorkspaceMemberMiddleware(),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const isChannel = req.query.is_channel === "true";
 

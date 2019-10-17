@@ -93,7 +93,7 @@ const accountSetup = async (
     logger
       .child({ error: err })
       .error(
-        "Failed to update the user information in all workspaces under the school"
+        "Failed to update the user information tied to all workspaces under the school"
       );
 
     throw err;
@@ -486,11 +486,7 @@ export const updatePassword = async (
       { $set: { hash } }
     );
     if (status.n === 0) {
-      logger
-        .child(status)
-        .error(
-          "Intsernal server error, failed to update the user hash in the users collection"
-        );
+      logger.child(status).debug("debugging update query");
 
       throw new Error(
         "Intsernal server error, failed to update the user hash in the users collection"
@@ -586,11 +582,7 @@ export const resetPassword = async (
     );
 
     if (status.n === 0) {
-      logger
-        .child(status)
-        .error(
-          "Internal server error, failed to update the user hash and undeactivate the user account"
-        );
+      logger.child(status).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to update the user hash and undeactivate the user account"
@@ -657,7 +649,7 @@ export const reactivateAccount = async (
     if (status.n === 0) {
       logger
         .child(status)
-        .error("Faild to update the the user account from being deactivated");
+        .warn("Faild to update the the user account from being deactivated");
       return;
     }
   } catch (err) {
@@ -783,9 +775,7 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
     );
 
     if (status.n === 0) {
-      logger
-        .child(status)
-        .error("Internal server error, failed to deactivate the user account");
+      logger.child(status).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to deactivate the user account"

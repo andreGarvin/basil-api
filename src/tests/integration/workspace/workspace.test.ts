@@ -27,6 +27,7 @@ const test = ava as TestInterface<Context>;
 
 // types
 import { WorkspaceTypes, WorkspaceScopes } from "../../../routes/workspace";
+import { DEFAULT_MAIN_CHANNEL_NAME } from "../../../routes/messenger";
 import { InvitationRoles } from "../../../routes/invitation";
 
 import app from "../../../index";
@@ -60,6 +61,8 @@ test.afterEach.always(async t => {
   await db.clearWorkspaces();
 
   await db.clearRegistry();
+
+  await db.clearGroups();
 
   await db.clearUsers();
 });
@@ -113,6 +116,12 @@ test("/api/workspace/create", async t => {
       workspace_id: response.body.id
     }
   );
+
+  const mainWorkspaceChannel = await db.findGroupById(
+    response.body.main_channel_id
+  );
+
+  t.is(mainWorkspaceChannel.name, DEFAULT_MAIN_CHANNEL_NAME);
 });
 
 test("/api/workspace/create (sending invalid data)", async t => {
@@ -571,6 +580,8 @@ test("/api/workspace/info/:workspace_id", async t => {
 
   t.is(response.status, 200, "should return status of 200");
 
+  const mainWorkspaceChannel = await db.getMainChannel(workspace.id);
+
   const workspaceMember = await db.findWorkspaceMemberByUserId(
     t.context.user.id,
     workspace.id
@@ -588,6 +599,7 @@ test("/api/workspace/info/:workspace_id", async t => {
     archived: workspace.archived,
     created_at: workspace.created_at,
     description: workspace.description,
+    main_channel_id: mainWorkspaceChannel.id,
     meta: {
       status: workspaceMember.status,
       is_admin: workspaceMember.is_admin,
@@ -667,6 +679,8 @@ test("/api/workspace/", async t => {
 
   t.is(response.status, 200, "should return status of 200");
 
+  const mainWorkspaceChannel = await db.getMainChannel(workspace.id);
+
   const workspaceMember = await db.findWorkspaceMemberByUserId(
     t.context.user.id,
     workspace.id
@@ -686,6 +700,7 @@ test("/api/workspace/", async t => {
         archived: workspace.archived,
         created_at: workspace.created_at,
         description: workspace.description,
+        main_channel_id: mainWorkspaceChannel.id,
         meta: {
           status: workspaceMember.status,
           is_admin: workspaceMember.is_admin,

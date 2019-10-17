@@ -21,7 +21,6 @@ const GroupSchema = new Schema({
   // the name of the group
   name: {
     required: true,
-    default: false,
     type: String
   },
 
@@ -57,7 +56,6 @@ const GroupSchema = new Schema({
 
   // the id of the workspace the group is under
   workspace_id: {
-    default: false,
     required: true,
     type: String
   },

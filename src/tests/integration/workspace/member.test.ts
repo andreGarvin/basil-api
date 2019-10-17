@@ -1166,3 +1166,30 @@ test("/api/workspace/member/remove/:workspace_id/:memebr_user_id (a admin attemp
     WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION
   );
 });
+
+test("/api/workspace/member/remove/:workspace_id/:memebr_user_id (removing a member that does not have a account)", async t => {
+  const [generateEmail] = db.generateUserEmails(t.context.user.domain, 1);
+
+  // adding a new member to the workspace
+  const memberInfo = await db.createWorkspaceMember(
+    generateEmail,
+    t.context.workspace.id
+  );
+
+  const response = await request(app)
+    .delete(
+      `/api/workspace/member/remove/${t.context.workspace.id}/${memberInfo.user_id}`
+    )
+    .set("x-token", `Bearer ${t.context.user.token}`);
+
+  t.log(JSON.stringify(response, null, 4));
+
+  t.is(response.status, 200, "should return a status code 200");
+
+  const workspaceMemberInfo = await db.findWorkspaceMemberByUserId(
+    memberInfo.user_id,
+    t.context.workspace.id
+  );
+
+  t.is(workspaceMemberInfo, null);
+});

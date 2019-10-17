@@ -1,11 +1,13 @@
 // models
 import workspaceMemberRequestModel from "./request/model";
+import groupModel from "../messenger/models/group";
 import workspaceMemberModel from "./member/model";
 import userModel from "../authentication/model";
 import workspaceModel from "./model";
 
 // module
 import { InvitationRoles } from "../invitation";
+import * as messenger from "../messenger";
 
 // config
 import { CHARACTER_LIMIT } from "../../config";
@@ -82,31 +84,26 @@ export const getWorkspace = async (userId: string, workspaceId: string) => {
     );
 
     // fetching the informatin of the workspace's main channel
-    // const workspaceGeneralChannel = await chatModel.findOne(
-    //   {
-    //     is_channel: true,
-    //     workspace_id: workspace.id,
-    //     name: MAIN_WORKSPACE_CHANNEL
-    //   },
-    //   // only returning the id of the channel
-    //   {
-    //     id: 1
-    //   }
-    // );
-    // if (workspaceGeneralChannel === null) {
-    //   logger
-    //     .addFields({
-    //       workspace_id: workspace.id,
-    //       name: MAIN_WORKSPACE_CHANNEL
-    //     })
-    //     .error(
-    //       "Internal server error the general channel for the workspace was not found"
-    //     );
+    const mainWorkspaceChannel = await groupModel.findOne(
+      {
+        is_channel: true,
+        workspace_id: workspace.id,
+        name: messenger.DEFAULT_MAIN_CHANNEL_NAME
+      },
+      // only returning the id of the channel
+      {
+        id: 1
+      }
+    );
+    if (mainWorkspaceChannel === null) {
+      logger.error(
+        "Internal server error, failed to retrieve the main workspace channel"
+      );
 
-    //   throw new Error(
-    //     "Internal server error the general channel for the workspace was not found"
-    //   );
-    // }
+      throw new Error(
+        "Internal server error, failed to retrieve the main workspace channel"
+      );
+    }
 
     // workspace information and meta data returned
     return {
@@ -120,7 +117,7 @@ export const getWorkspace = async (userId: string, workspaceId: string) => {
       created_at: workspace.created_at,
       description: workspace.description,
       // the id of the workspace's main channel
-      // main_channel_id: workspaceGeneralChannel.id,
+      main_channel_id: mainWorkspaceChannel.id,
       // this is a field that holds the member's information related to the workspace
       meta: {
         // the user's activity status in the workspace
@@ -198,11 +195,32 @@ export const getUserWorkspaces = async (userId: string) => {
           }
         }
       },
-      // removing fields on the documents
+      // joining 'groups.workspace_id' on 'workspaces.id'
       {
-        $project: {
-          workspaces: 0,
-          workspace_id: 0
+        $lookup: {
+          from: "groups",
+          as: "channels",
+          let: {
+            workspace_id: "$workspace_id"
+          },
+          // only matching all groups that are channels and match the main channel name
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  is_channel: true,
+                  workspace_id: "$$workspace_id",
+                  name: messenger.DEFAULT_MAIN_CHANNEL_NAME
+                }
+              }
+            }
+          ]
+        }
+      },
+      // separate the array 'channels' into individual documents
+      {
+        $unwind: {
+          path: "$channels"
         }
       },
       // constructing a new docment
@@ -217,6 +235,7 @@ export const getUserWorkspaces = async (userId: string) => {
           archived: 1,
           created_at: 1,
           description: 1,
+          main_channel_id: "$channels.id",
           meta: {
             status: 1,
             is_admin: 1,
@@ -231,50 +250,14 @@ export const getUserWorkspaces = async (userId: string) => {
           }
         }
       },
-      // joining 'chats.workspace_id' on 'workspace.id'
-      // {
-      //   $lookup: {
-      //     from: "chats",
-      //     as: "channels",
-      //     localField: "id",
-      //     foreignField: "workspace_id"
-      //   }
-      // },
-      // seperate the array 'channels' into individual documents
-      // {
-      //   $unwind: {
-      //     path: "$channels"
-      //   }
-      // },
-      // only matching all chats that are channels and match the main channel name for workspaces
-      // {
-      //   $match: {
-      //     "channels.is_channel": true,
-      //     "channels.name": MAIN_WORKSPACE_CHANNEL
-      //   }
-      // },
-      // constructing a new document
-      // {
-      //   $project: {
-      //     // the id of the workspace
-      //     id: 1,
-      //     name: 1,
-      //     type: 1,
-      //     meta: 1,
-      //     scope: 1,
-      //     section: 1,
-      //     archived: 1,
-      //     created_at: 1,
-      //     description: 1,
-      //     main_channel_id: "$channels.id"
-      //   }
-      // },
       // removing unwanted fields on the documents
       {
         $project: {
           __v: 0,
           _id: 0,
-          creator: 0
+          creator: 0,
+          workspaces: 0,
+          workspace_id: 0
         }
       }
     ]);
@@ -418,6 +401,14 @@ export const createWorkspace = async (
     // inserting the new workspace member info into the 'workspace_members' collection
     await member.save();
 
+    // creating the main workspace channel
+    const mainChannel = await messenger.createChannel(
+      userId,
+      newWorkspace.id,
+      messenger.DEFAULT_MAIN_CHANNEL_NAME,
+      `This is ${newWorkspace.name} main channel for discussions`
+    );
+
     return {
       id: newWorkspace.id,
       name: newWorkspace.name,
@@ -425,6 +416,7 @@ export const createWorkspace = async (
       scope: newWorkspace.scope,
       section: newWorkspace.section,
       creator: newWorkspace.creator,
+      main_channel_id: mainChannel.id,
       archived: newWorkspace.archived,
       created_at: newWorkspace.created_at,
       description: newWorkspace.description
@@ -449,15 +441,6 @@ export const archiveWorkspace = async (
   workspaceId: string
 ): Promise<boolean> => {
   try {
-    // fetching the user information
-    const user = await userModel.findOne(
-      { id: userId },
-      {
-        id: 1,
-        role: 1
-      }
-    );
-
     // fetching the workspace information
     const workspace = await workspaceModel.findOne(
       {
@@ -467,6 +450,24 @@ export const archiveWorkspace = async (
         id: 1,
         creator: 1,
         archived: 1
+      }
+    );
+    if (workspace === null) {
+      throw ErrorResponse(
+        WorkspaceError.WORKSPACE_NOT_FOUND_EXCEPTION,
+        "this workspace does not exist",
+        {
+          http_code: 404
+        }
+      );
+    }
+
+    // fetching the user information
+    const user = await userModel.findOne(
+      { id: userId },
+      {
+        id: 1,
+        role: 1
       }
     );
 
@@ -538,7 +539,6 @@ export const updateWorkspaceInfo = async (
         type: 1,
         scope: 1,
         section: 1,
-        archived: 1,
         school_id: 1,
         description: 1
       }
@@ -621,7 +621,7 @@ export const updateWorkspaceInfo = async (
         creator: userId
       });
 
-      logger.child(fields).error("inspecting information");
+      logger.child(fields).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to update workspace information"

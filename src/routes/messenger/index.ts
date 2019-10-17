@@ -1,7 +1,13 @@
 // models
+import directMessageMemberModel from "./member/models/direct-message-member";
 import workspaceMemberModel from "../workspace/member/model";
+import groupMemberModel from "./member/models/group-member";
 import directMessageModel from "./models/direct-message";
+import userModel from "../authentication/model";
 import groupModel from "./models/group";
+
+// modules
+import * as messengerMember from "./member/index";
 
 // utils
 import Pagination from "../../common/utils/pagination";
@@ -13,20 +19,23 @@ import WorkspaceMemberError from "../workspace/member/error-codes";
 import { GroupError, DirectMessageError } from "./error-codes";
 
 // types
-import { Group, DirectMessage, GroupSearchResult } from "./types";
+import {
+  Group,
+  DirectMessage,
+  GroupSearchResult,
+  AggregatedGroupInfo,
+  AggregatedDirectMessageInfo
+} from "./types";
 
 // resources
-import { words, catBreeds } from "./resources";
 import { PaginationResults } from "../../types";
+import { words, catBreeds } from "./resources";
 
 // this is the main channel name for workspace
 export const DEFAULT_MAIN_CHANNEL_NAME: string = "general";
 
 /**
  * This function creates a new channel in the groups collection
- *
- * #TODO: Add the db query to insert all the workspace_members
- * members into the chat_members collection
  *
  * @param userId The user id of the workspace admin
  * @param workspaceId The id of the workspace
@@ -332,6 +341,8 @@ export const feelingLucky = async (
  * This function returns a pagination search result of groups and channels that matches
  * search provided
  *
+ * #TODO: Filter the groups that are private and that the user is a member of
+ *
  * @param userId The workspace member user id
  * @param workspaceId The id of the workspace
  * @param search The name of the group or channel
@@ -357,6 +368,72 @@ export const searchForGroups = async (
         }
       },
       {
+        $lookup: {
+          as: "group_members",
+          from: "group_members",
+          let: {
+            id: "$id",
+            user_id: userId,
+            workspace_id: workspaceId
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  group_id: "$$id",
+                  user_id: "$$user_id",
+                  workspace_id: "$$workspace_id"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        $match: {
+          $or: [
+            {
+              is_channel: true
+            },
+            {
+              group_members: {
+                $eq: [{ $size: "$group_members" }, 1]
+              }
+            }
+          ]
+        }
+      },
+      {
+        $unwind: {
+          path: "group_members",
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $lookup: {
+          as: "workspace_members",
+          from: "workspace_members",
+          let: {
+            user_id: userId,
+            workspace_id: workspaceId
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  group_id: "$$id",
+                  user_id: "$$user_id",
+                  workspace_id: "$$workspace_id"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        $unwind: "$workspace_members"
+      },
+      {
         $project: {
           id: 1,
           name: 1,
@@ -367,6 +444,18 @@ export const searchForGroups = async (
           description: 1,
           workspace_id: 1,
           meta: {
+            is_admin: {
+              $ifNull: [
+                "$group_members.is_admin",
+                "$workspace_members.is_admin"
+              ]
+            },
+            // is_member: {
+            //   $cond: [
+            //     {},
+
+            //   ]
+            // },
             is_creator: {
               $eq: ["$creator", userId]
             }
@@ -395,12 +484,214 @@ export const searchForGroups = async (
 };
 
 // #TODO: implement functions logic when working on message/member
-export const archiveGroup = async (groupId: string): Promise<void> => {};
-export const getGroupInfo = async (groupId: string): Promise<void> => {};
-export const getDirectMessageInfo = async (
+export const archiveGroup = async (
+  userId: string,
   groupId: string
-): Promise<void> => {};
+): Promise<boolean> => {
+  try {
+    const group = await groupModel.findOne(
+      {
+        id: groupId,
+        creator: userId
+      },
+      {
+        archived: 1
+      }
+    );
+    if (group === null) {
+      throw ErrorResponse(
+        WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
+        "only the creator of this workspace can archive this group"
+      );
+    }
+
+    const status = await groupModel.updateOne(
+      { id: groupId },
+      {
+        $set: {
+          archived: !group.archived
+        }
+      }
+    );
+
+    if (status.n === 0) {
+      const fields = Object.assign({}, status, {
+        group_id: groupId
+      });
+
+      logger.child(fields).debug("debugging update query");
+
+      throw new Error(
+        "Internal server error, failed to update the group to archived"
+      );
+    }
+
+    return !group.archived;
+  } catch (err) {
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to archive the group");
+    }
+
+    throw err;
+  }
+};
+
+export const getGroupInfo = async (
+  userId: string,
+  groupId: string
+): Promise<AggregatedGroupInfo> => {
+  try {
+    const groupInfo = await groupModel.findOne(
+      {
+        id: groupId
+      },
+      {
+        id: 1,
+        name: 1,
+        creator: 1,
+        archived: 1,
+        created_at: 1,
+        is_private: 1,
+        is_channel: 1,
+        description: 1,
+        workspace_id: 1
+      }
+    );
+
+    let isGroupAdmin: boolean;
+    if (groupInfo.is_channel) {
+      const workspaceMemberInfo = await workspaceMemberModel.findOne(
+        {
+          user_id: userId
+        },
+        {
+          is_admin: 1
+        }
+      );
+
+      isGroupAdmin = workspaceMemberInfo.is_admin;
+    } else {
+      const groupMemberInfo = await groupMemberModel.findOne(
+        {
+          user_id: userId
+        },
+        {
+          is_admin: 1
+        }
+      );
+
+      isGroupAdmin = groupMemberInfo.is_admin;
+    }
+
+    return {
+      id: groupInfo.id,
+      name: groupInfo.name,
+      creator: groupInfo.creator,
+      archived: groupInfo.archived,
+      created_at: groupInfo.created_at,
+      is_private: groupInfo.is_private,
+      is_channel: groupInfo.is_channel,
+      description: groupInfo.description,
+      workspace_id: groupInfo.workspace_id,
+      meta: {
+        is_admin: isGroupAdmin,
+        is_creator: groupInfo.creator === userId
+      }
+    };
+  } catch (err) {
+    logger.child({ error: err }).error("Failed to get group info");
+
+    throw err;
+  }
+};
+
+export const getDirectMessageInfo = async (
+  userId: string,
+  directMessageId: string
+): Promise<AggregatedDirectMessageInfo> => {
+  try {
+    const directMessageInfo = await directMessageModel.findOne(
+      {
+        id: directMessageId
+      },
+      {
+        id: 1,
+        archived: 1,
+        created_at: 1,
+        workspace_id: 1
+      }
+    );
+
+    const member = await directMessageMemberModel.findOne(
+      {
+        user_id: {
+          $not: {
+            $eq: userId
+          }
+        },
+        direct_message_id: directMessageInfo.id,
+        workspace_id: directMessageInfo.workspace_id
+      },
+      { user_id: 1 }
+    );
+    if (member) {
+      throw new Error(
+        "Failed to fetch the other user direct message information"
+      );
+    }
+
+    const workspaceMemberInfo = await workspaceMemberModel.findOne(
+      {
+        user_id: member.user_id
+      },
+      {
+        status: 1,
+        is_admin: 1
+      }
+    );
+
+    const userInfo = await userModel.findOne(
+      {
+        id: member.user_id
+      },
+      {
+        email: 1,
+        last_name: 1,
+        photo_url: 1,
+        first_name: 1
+      }
+    );
+
+    return {
+      id: directMessageInfo.id,
+      archived: directMessageInfo.archived,
+      created_at: directMessageInfo.created_at,
+      workspace_id: directMessageInfo.workspace_id,
+      member: {
+        email: userInfo.email,
+        photo_url: userInfo.photo_url,
+        status: workspaceMemberInfo.status,
+        is_active: workspaceMemberInfo.is_active,
+        is_workspace_admin: workspaceMemberInfo.is_admin,
+        name: `${userInfo.first_name} ${userInfo.last_name}`
+      }
+    };
+  } catch (err) {
+    logger.child({ error: err }).error("Failed to get direct message info");
+
+    throw err;
+  }
+};
+
 export const getGroups = async (
   userId: string,
   workspaceId: string
-): Promise<void> => {};
+): Promise<void> => {
+  try {
+    const;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error("Failed to return the list of groups the user is a member of");
+  }
+};

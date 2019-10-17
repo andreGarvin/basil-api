@@ -14,8 +14,8 @@ import joiValidateResponse from "../../../common/utils/joi-validate-response";
 import returnInt from "../../../common/utils/return-int";
 
 // middleware
-import isWorkspaceMemberMiddleware from "../member/middleware/workspace-member";
-import workspaceExistMiddlware from "../middleware/workspace-exist";
+import isWorkspaceMemberMiddleware from "../member/middleware/is-workspace-member";
+import isWorkspaceArchivedMiddleware from "../middleware/is-workspace-archived";
 
 // schemas
 export const searchParamsSchema = joi.object().keys({
@@ -29,21 +29,17 @@ export const searchParamsSchema = joi.object().keys({
     .optional()
 });
 
-router.post(
-  "/send/:workspace_id",
-  workspaceExistMiddlware(true),
-  (req, res, next) => {
-    return memberRequest
-      .saveMemberRequest(req.state.user, req.params.workspace_id)
-      .then(requestResponse => res.status(200).json(requestResponse))
-      .catch(next);
-  }
-);
+router.post("/send/:workspace_id", (req, res, next) => {
+  return memberRequest
+    .saveMemberRequest(req.state.user, req.params.workspace_id)
+    .then(requestResponse => res.status(200).json(requestResponse))
+    .catch(next);
+});
 
 router.post(
   "/accept/:workspace_id/:user_id",
-  workspaceExistMiddlware(true),
   isWorkspaceMemberMiddleware(true),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     return memberRequest
       .acceptMemberRequest(
@@ -65,8 +61,8 @@ router.delete("/delete/:workspace_id", (req, res, next) => {
 
 router.delete(
   "/reject/:workspace_id/:user_id",
-  workspaceExistMiddlware(true),
   isWorkspaceMemberMiddleware(true),
+  isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     return memberRequest
       .rejectMemberRequest(req.params.workspace_id, req.params.user_id)
@@ -77,7 +73,6 @@ router.delete(
 
 router.get(
   "/:workspace_id",
-  workspaceExistMiddlware(),
   isWorkspaceMemberMiddleware(true),
   (req, res, next) => {
     const body = {

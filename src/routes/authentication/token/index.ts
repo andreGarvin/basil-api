@@ -145,11 +145,7 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
         school_id: user.school_id
       });
 
-      logger
-        .child(fields)
-        .error(
-          "Internal server error, failed to set the new token to user document"
-        );
+      logger.child(fields).debug("debugging update query");
 
       throw new Error(
         "Internal server error, failed to set the new token to user document"

@@ -26,7 +26,6 @@ const directMessageSchema = new Schema({
 
   // the id of the workspace the direct message is under
   workspace_id: {
-    default: false,
     required: true,
     type: String
   },
@@ -35,16 +34,7 @@ const directMessageSchema = new Schema({
   created_at: {
     default: () => new Date().toISOString(),
     type: Date
-  },
-
-  /* the member of the direct message, this to make easier
-  colleration for dircet messages in workspaces */
-  members: [
-    {
-      required: true,
-      type: String
-    }
-  ]
+  }
 });
 
 export default model<DirectMessageModel>(

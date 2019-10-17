@@ -29,9 +29,9 @@ import {
   emailObjectSchema
 } from "./request-schemas";
 
-const loginUrl = new URL(WEB_APP_HOST);
-loginUrl.protocol = process.env.IS_DOCKER ? "https" : "http";
-loginUrl.pathname = "/login";
+const webApploginUrl = new URL(WEB_APP_HOST);
+webApploginUrl.protocol = process.env.IS_DOCKER ? "https" : "http";
+webApploginUrl.pathname = "/login";
 
 // extended authentication routes
 router.use("/token", tokenRoute);
@@ -152,31 +152,31 @@ router.post("/authenticate", (req, res, next) => {
 router.get("/verify/:verification_token", (req, res, next) => {
   return authentication
     .verifyAccount(req.params.verification_token)
-    .then(() => res.redirect(loginUrl.href))
+    .then(() => res.redirect(webApploginUrl.href))
     .catch(err => {
       if (err instanceof Error) {
         return next(err);
       }
 
-      res.redirect(loginUrl.href);
+      res.redirect(webApploginUrl.href);
     });
 });
 
 router.get("/reactivate", (req, res, next) => {
   const token = req.query.token;
   if (typeof token !== "string") {
-    return res.redirect(loginUrl.href);
+    return res.redirect(webApploginUrl.href);
   }
 
   return authentication
     .reactivateAccount(token)
-    .then(() => res.redirect(loginUrl.href))
+    .then(() => res.redirect(webApploginUrl.href))
     .catch(err => {
       if (err instanceof Error) {
         return next(err);
       }
 
-      res.redirect(loginUrl.href);
+      res.redirect(webApploginUrl.href);
     });
 });
 

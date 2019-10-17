@@ -10,6 +10,7 @@ import * as faker from "faker";
 import workspaceMemberRequestModel from "../routes/workspace/request/model";
 import directMessageModel from "../routes/messenger/models/direct-message";
 import workspaceMemberModel from "../routes/workspace/member/model";
+import groupMemberModel from "../routes/messenger/member/models/group-member";
 import groupModel from "../routes/messenger/models/group";
 import invitationModel from "../routes/invitation/model";
 import workspaceModel from "../routes/workspace/model";
@@ -21,7 +22,7 @@ import logger from "../common/logger";
 
 // module enums
 import { WorkspaceTypes, WorkspaceScopes } from "../routes/workspace";
-import { InvitationRoles } from "../routes/invitation";
+import { DEFAULT_MAIN_CHANNEL_NAME } from "../routes/messenger";
 
 // config
 import {
@@ -230,6 +231,15 @@ export const createWorkspace = async (
     });
 
     await newMember.save();
+
+    const mainWorkspaceChannel = new groupModel({
+      creator: userId,
+      is_channel: true,
+      workspace_id: newWorkspace.id,
+      name: DEFAULT_MAIN_CHANNEL_NAME
+    });
+
+    mainWorkspaceChannel.save();
 
     return newWorkspace.toJSON();
   } catch (err) {
@@ -466,6 +476,24 @@ export const findInvitationById = async (
   }
 };
 
+export const getMainChannel = async (workspaceId: string): Promise<Group> => {
+  try {
+    const channel = await groupModel.findOne({
+      is_channel: true,
+      workspace_id: workspaceId,
+      name: DEFAULT_MAIN_CHANNEL_NAME
+    });
+
+    return channel ? channel.toJSON() : channel;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from groups collection"
+      );
+  }
+};
+
 export const findWorkspaceById = async (
   workspaceId: string
 ): Promise<Workspace> => {
@@ -492,6 +520,20 @@ export const findGroupById = async (groupId: string): Promise<Group> => {
       .child({ error: err })
       .error(
         "Test helper function failed to return document from direct_messages collection"
+      );
+  }
+};
+
+export const returnGroupMembersById = async (groupId: string) => {
+  try {
+    return await groupMemberModel.find({
+      chat_id: groupId
+    });
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from group_members collection"
       );
   }
 };
@@ -853,6 +895,20 @@ export const clearInvitations = async () => {
       .child({ error: err })
       .error(
         "Test helper function failed delete all mock data form invitations collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearGroupMembers = async () => {
+  try {
+    await groupMemberModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete all mock data form groups_members collection"
       );
 
     throw err;
