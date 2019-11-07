@@ -13,6 +13,9 @@ const test = ava as TestInterface<{
   };
 }>;
 
+// config
+import { USER_TOKEN_EXPIRATION, TOKEN_SECRET } from "../../config";
+
 // database helper functions
 import * as db from "../helper";
 
@@ -21,7 +24,6 @@ import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
 
 import app from "../../index";
-import { USER_TOKEN_EXPIRATION } from "../../config";
 
 test.beforeEach(async t => {
   const user = await db.createUser({
@@ -74,7 +76,7 @@ test("/auth/token/authenicate (providing a expired token)", async t => {
       is_admin: false,
       email: t.context.user.id
     },
-    process.env.JSON_WEB_TOKEN_SECERT,
+    TOKEN_SECRET,
     {
       algorithm: "HS256",
       expiresIn: "1ms"
@@ -101,7 +103,7 @@ test("/auth/token/authenicate (providing a token with no existing account)", asy
       is_admin: true,
       email: randomUserEmil
     },
-    process.env.JSON_WEB_TOKEN_SECERT,
+    TOKEN_SECRET,
     {
       algorithm: "HS256",
       expiresIn: USER_TOKEN_EXPIRATION

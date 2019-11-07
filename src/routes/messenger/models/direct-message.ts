@@ -2,6 +2,9 @@ import * as uuid from "uuid/v4";
 
 import { Document, Schema, model } from "mongoose";
 
+// config
+import { HOST } from "../../../config";
+
 // types
 import { DirectMessage } from "../types";
 
@@ -13,7 +16,7 @@ const directMessageSchema = new Schema({
   // id of the direct message
   id: {
     // generating random id string
-    default: () => uuid(process.env.HOST, uuid.URL),
+    default: () => uuid(HOST, uuid.URL),
     required: true,
     type: String
   },

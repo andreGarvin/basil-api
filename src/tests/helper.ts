@@ -5,6 +5,9 @@ import * as bcrypt from "bcryptjs";
 import * as uuid from "uuid/v4";
 import * as faker from "faker";
 
+// config
+import { HOST } from "../config";
+
 // models
 // import groupMemberModel from "../routes/messenger/member/models/group-member";
 // import directMessageModel from "../routes/messenger/models/direct-message";
@@ -176,7 +179,7 @@ export const createUser = async (
       .digest("hex");
 
     // generating a random user id
-    const userId: string = uuid(process.env.HOST, uuid.URL);
+    const userId: string = uuid(HOST, uuid.URL);
 
     // creating the user token
     const newUserToken = token.createUserToken(

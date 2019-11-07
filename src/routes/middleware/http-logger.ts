@@ -2,6 +2,9 @@ import * as http from "http";
 
 import * as express from "express";
 
+// config
+import { HOST } from "../../config";
+
 // utils
 import logger from "../../common/logger";
 import { URL } from "url";
@@ -84,7 +87,7 @@ export default (): express.RequestHandler => {
 
       // this will not show logs when running test
       if (process.env.NODE_ENV !== "test") {
-        const url = [process.env.HOST, req.url].join("");
+        const url = [HOST, req.url].join("");
 
         const cleanUrl = new URL(url);
         cleanUrl.searchParams.delete("token");

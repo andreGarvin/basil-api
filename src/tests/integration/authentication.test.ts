@@ -25,7 +25,8 @@ import {
   USER_TOKEN_EXPIRATION,
   TOKEN_SECRET,
   MAX_FILE_SIZE,
-  MAX_USERNAME_LENGTH
+  MAX_USERNAME_LENGTH,
+  BASIL_EMAIL_DOMAIN
 } from "../../config";
 const validationJsonResponse = ValidationJsonResponse();
 
@@ -108,7 +109,7 @@ test("/auth/create (a email with the basil domain)", async t => {
   const mockUser = db.createMockUserInfo();
 
   mockUser.password = "@Foobarb3z1";
-  mockUser.email = `jondoe@${process.env.BASIL_EMAIL_DOMAIN}`;
+  mockUser.email = `jondoe@${BASIL_EMAIL_DOMAIN}`;
 
   const response = await request(app)
     .post("/auth/create")

@@ -13,10 +13,10 @@ import * as handlebars from "handlebars";
 import logger from "../logger";
 
 // config
-import { NO_REPLY } from "../../config";
+import { NO_REPLY, SENDGRID_API_KEY } from "../../config";
 
 // providing the send grid api with the API KEY
-sendgrid.setApiKey(process.env.SENDGRID_API_KEY);
+sendgrid.setApiKey(SENDGRID_API_KEY);
 
 handlebars.registerHelper("Badge", (name: string) => {
   if (name) {
