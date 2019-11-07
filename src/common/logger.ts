@@ -1,6 +1,9 @@
 import * as dontenv from "dotenv";
 dontenv.config();
 
+// config
+import { APP_NAME, HOST } from "../config";
+
 import * as winston from "winston";
 import chalk from "chalk";
 
@@ -23,8 +26,8 @@ const LOG_LEVEL: string = DEBUG ? "debug" : process.env.LOG_LEVEL || "verbose";
 // default fields
 const defaultFields = {
   env: ENV,
-  host: process.env.HOST || "",
-  service: process.env.APP_NAME || ""
+  host: HOST || "",
+  service: APP_NAME || ""
 };
 
 // this function returns the colorized log level
