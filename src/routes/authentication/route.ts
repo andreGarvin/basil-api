@@ -1,17 +1,16 @@
-import { URL } from "url";
-
 import * as joi from "joi";
 
 import * as express from "express";
 const router = express.Router();
 
 // config
-import { ValidationJsonResponse, WEB_APP_HOST } from "../../config";
+import { ValidationJsonResponse, APPLICATION_URL } from "../../config";
 
 // module
 import * as authentication from "./index";
 
 // routes
+import googleOauthRoute from "./google-oauth/route";
 import tokenRoute from "./token/route";
 
 // utils
@@ -29,12 +28,9 @@ import {
   emailObjectSchema
 } from "./request-schemas";
 
-const webApploginUrl = new URL(WEB_APP_HOST);
-webApploginUrl.protocol = process.env.IS_DOCKER ? "https" : "http";
-webApploginUrl.pathname = "/login";
-
 // extended authentication routes
 router.use("/token", tokenRoute);
+router.use("/oauth/google", googleOauthRoute);
 
 router.post("/create", (req, res, next) => {
   const { error } = joi.validate(req.body, createAccountSchema, {
@@ -152,31 +148,31 @@ router.post("/authenticate", (req, res, next) => {
 router.get("/verify/:verification_token", (req, res, next) => {
   return authentication
     .verifyAccount(req.params.verification_token)
-    .then(() => res.redirect(webApploginUrl.href))
+    .then(() => res.redirect(APPLICATION_URL))
     .catch(err => {
       if (err instanceof Error) {
         return next(err);
       }
 
-      res.redirect(webApploginUrl.href);
+      res.redirect(APPLICATION_URL);
     });
 });
 
 router.get("/reactivate", (req, res, next) => {
   const token = req.query.token;
   if (typeof token !== "string") {
-    return res.redirect(webApploginUrl.href);
+    return res.redirect(APPLICATION_URL);
   }
 
   return authentication
     .reactivateAccount(token)
-    .then(() => res.redirect(webApploginUrl.href))
+    .then(() => res.redirect(APPLICATION_URL))
     .catch(err => {
       if (err instanceof Error) {
         return next(err);
       }
 
-      res.redirect(webApploginUrl.href);
+      res.redirect(APPLICATION_URL);
     });
 });
 

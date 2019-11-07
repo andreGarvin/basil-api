@@ -20,8 +20,9 @@ import * as mongoose from "mongoose";
 import * as bodyParser from "body-parser";
 // express middleware for headers
 import * as helmet from "helmet";
-// cross origin middleware
-import * as cors from "cors";
+
+// config validation util
+import configValidation from "./common/utils/config-validation";
 
 // logger util
 import logger from "./common/logger";
@@ -30,7 +31,7 @@ import logger from "./common/logger";
 import routes from "./routes";
 
 // config
-import { MONGO_URI, ORIGIN_WHITE_LIST, PORT } from "./config";
+import { MONGO_URI, PORT } from "./config";
 
 import * as types from "./types";
 
@@ -48,42 +49,28 @@ declare global {
   }
 }
 
-// this checks if the server has all environment variables needed
 if (process.env.NODE_ENV !== "test") {
-  const requiredEnvVariables: string[] = [
-    "HOST",
-    "API_KEY",
-    "MONGO_URI",
-    "WEB_APP_HOST",
-    "GIPHY_API_KEY",
-    "SENDGRID_API_KEY",
-    "AWS_ACCESS_KEY_ID",
-    "AWS_ACCESS_KEY_ID",
-    "TEMP_TOKEN_EXPIRATION",
-    "USER_TOKEN_EXPIRATION",
-    "JSON_WEB_TOKEN_SECERT",
-    "AWS_SECERT_ACCESS_KEY"
-  ];
-
-  const missingEnvVariables: string[] = [];
-  requiredEnvVariables.forEach(env => {
-    if (typeof process.env[env] === "undefined") {
-      missingEnvVariables.push(env);
-    }
-  });
-
-  if (missingEnvVariables.length !== 0) {
-    logger.warn(
-      "YOU ARE MISSING THESE ENVIRONMENTAL VARIABLES [ %s ]",
-      missingEnvVariables.join(", ")
-    );
-
-    process.exit(1);
-  }
+  configValidation(process.env);
 }
 
+// middleware
+
+// http header protection
+app.use(helmet());
+
+// JSON body parsing
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+
+/* routes */
+
+app.use(routes);
+
 // MONGODB connection
-mongoose.connect(MONGO_URI, { useNewUrlParser: true });
+mongoose.connect(MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 
 mongoose.connection.on("connected", err => {
   if (err) {
@@ -115,21 +102,3 @@ mongoose.connection.on("disconnected", () => {
     process.exit(1);
   }
 });
-
-// middleware
-
-// http header protection
-app.use(helmet());
-
-// JSON body parsing
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
-
-/* This allows other web applications to make http requests to
-the api, meaning websites that are not of the same origin or
-host only whitelisted ports */
-app.use(cors({ origin: ORIGIN_WHITE_LIST }));
-
-/* routes */
-
-app.use(routes);

@@ -3,48 +3,46 @@ import { URL } from "url";
 
 import * as jwt from "jsonwebtoken";
 import * as bcrypt from "bcryptjs";
-import * as uuid from "uuid/v4";
-
-// models
-import workspaceMemberModel from "../workspace/member/model";
-import invitationModel from "../invitation/model";
-import registryModel from "../registry/model";
-import userModel from "./model";
-
-// module
-import { InvitationRoles } from "../invitation";
 
 // config
 import {
-  NO_REPLY,
+  // APPLICATION_URL,
+  MAX_USERNAME_LENGTH,
+  BASIL_EMAIL_DOMAIN,
   TOKEN_SECRET,
-  WEB_APP_HOST,
-  USER_TOKEN_EXPIRATION,
-  TEMP_TOKEN_EXPIRATION
+  SALT_LENGTH,
+  NO_REPLY,
+  HOST
 } from "../../config";
 
+// models
+import userModel from "./model";
+
+// modules
+import * as token from "./token";
+
 // utils
-import {
-  TEMPLATES,
-  sendEmailTemplate
-} from "../../common/utils/send-email-template";
 import ErrorResponse from "../../common/utils/error";
+import {
+  sendEmailTemplate,
+  TEMPLATES
+} from "../../common/utils/send-email-template";
 import logger from "../../common/logger";
 
-// error codes
-import RegistryError from "../registry/error-codes";
+// error codess
 import AuthenticationError from "./error-codes";
 import TokenError from "./token/error-codes";
 
 // types
 import { NewUserInfo, AccountCredentials } from "./types";
+import UserError from "../user/error-codes";
 
 const AVATAR_PHOTO_URL = "https://www.gravatar.com/avatar";
 
 /**
  * This function checks if the users password is unique
  *
- * @param {string} password a password
+ * @param password a password
  */
 const uniquePassword = (
   password: string
@@ -63,41 +61,6 @@ const uniquePassword = (
     !error.SPECIAL_CHARACTER;
 
   return bool === false ? error : null;
-};
-
-/**
- * This method is to used internally, this method handles add the user to all the workspaces
- * and channels they have been added to
- */
-const accountSetup = async (
-  userId: string,
-  userEmail: string,
-  schoolId: string
-): Promise<void> => {
-  try {
-    // updating all the documents in workspace_members collection that have the user's email
-    await workspaceMemberModel.updateMany(
-      {
-        user_id: {
-          $options: "i",
-          $regex: userEmail
-        }
-      },
-      {
-        $set: {
-          user_id: userId
-        }
-      }
-    );
-  } catch (err) {
-    logger
-      .child({ error: err })
-      .error(
-        "Failed to update the user information tied to all workspaces under the school"
-      );
-
-    throw err;
-  }
 };
 
 /**
@@ -123,11 +86,11 @@ export const authenticate = async (
       // only returning the information that was needed
       {
         id: 1,
-        role: 1,
         hash: 1,
         token: 1,
+        email: 1,
+        is_admin: 1,
         verified: 1,
-        school_id: 1,
         deactivated: 1
       }
     );
@@ -145,7 +108,7 @@ export const authenticate = async (
       throw ErrorResponse(
         AuthenticationError.FAILED_AUTHENTICATION_EXCEPTION,
         "Incorrect email or password",
-        { http_code: 400 }
+        { http_code: 401 }
       );
     }
 
@@ -165,30 +128,21 @@ export const authenticate = async (
       );
     }
 
-    try {
-      // each time a user logs in to their accoun the this field is updated
-      await userModel.updateOne(
-        { id: account.id },
-        {
-          $set: {
-            last_login_at: new Date().toISOString()
-          }
+    // each time a user logs in to their account the this field is updated
+    await userModel.updateOne(
+      { id: account.id },
+      {
+        $set: {
+          last_login_at: new Date().toISOString()
         }
-      );
-    } catch (err) {
-      logger
-        .child({ error: err })
-        .error(
-          "Failed to update user data last_login_at when authenticating a user"
-        );
-      throw err;
-    }
+      }
+    );
 
     return {
-      role: account.role,
       user_id: account.id,
+      email: account.email,
       token: account.token,
-      school_id: account.school_id
+      is_admin: account.is_admin
     };
   } catch (err) {
     if (err instanceof Error) {
@@ -202,35 +156,21 @@ export const authenticate = async (
 };
 
 /**
- * This function creates and inserts a new user account into the users collection
+ * This function creates and inserts a new user information into the users
+ * collection
  *
  * @param userInfo The user info provided to create the account
  */
 export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
   try {
-    // checking if the school access code is valid
-    const school = await registryModel.findOne({
-      name: {
-        $regex: userInfo.school_name
-      }
-    });
-    if (school === null) {
-      throw ErrorResponse(
-        RegistryError.SCHOOL_NOT_FOUND_EXCEPTION,
-        "The school name that was provided does not exist",
-        { http_code: 400 }
-      );
-    }
-
-    // checking the user account already exist under the same email and school
-    const account = await userModel.findOne({
+    // checking the user account already exist under the same email
+    const user = await userModel.findOne({
       email: {
         $options: "i",
         $regex: userInfo.email
-      },
-      school_id: school.id
+      }
     });
-    if (account !== null) {
+    if (user !== null) {
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_EXIST_EXCEPTION,
         "Account already exist",
@@ -238,43 +178,27 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
       );
     }
 
-    if (school.domain) {
-      if (!userInfo.email.endsWith(school.domain)) {
-        throw ErrorResponse(
-          RegistryError.DOMAIN_EXCEPTION,
-          "The email that you have provided does not match the school domain email",
-          { http_code: 400 }
-        );
-      }
+    if (userInfo.username.length > MAX_USERNAME_LENGTH) {
+      throw ErrorResponse(
+        UserError.MAX_USERNAME_LENGTH_EXCEPTION,
+        "This user is more then 30 characters",
+        { http_code: 400 }
+      );
     }
 
-    // checking if the user was sent a invitation
-    const invitation = await invitationModel.findOne({
-      email: {
+    // checking if the user account exist
+    const account = await userModel.findOne({
+      username: {
         $options: "i",
-        $regex: userInfo.email
-      },
-      school_id: school.id
+        $regex: userInfo.username
+      }
     });
-    if (invitation) {
-      // checking if the user role matches the invitation type before inserting in the users collection
-      if (userInfo.role !== invitation.type) {
-        throw ErrorResponse(
-          AuthenticationError.USER_ROLE_EXCEPTION,
-          "This role was not assigned to your account",
-          { http_code: 400 }
-        );
-      }
-    } else {
-      if (userInfo.role === undefined) {
-        userInfo.role = InvitationRoles.STUDENT;
-      } else if (userInfo.role !== InvitationRoles.STUDENT) {
-        throw ErrorResponse(
-          AuthenticationError.USER_ROLE_EXCEPTION,
-          "The role that was selected was not assigned to your account",
-          { http_code: 400 }
-        );
-      }
+    if (account !== null) {
+      throw ErrorResponse(
+        UserError.USERNAME_EXIST_EXCEPTION,
+        "This username is taken",
+        { http_code: 400 }
+      );
     }
 
     // checking if the users password is unique
@@ -287,67 +211,37 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
       );
     }
 
-    // generating a user id
-    const userId = uuid(process.env.HOST, uuid.URL)
-      .split("-")
-      .join("");
-
     // checking a default profile photo for the user account
     const md5Hash = crypto
       .createHash("md5")
       .update(userInfo.email)
       .digest("hex");
 
+    // the user profile photo url
     const avatarPhotoUrl = new URL(AVATAR_PHOTO_URL);
     avatarPhotoUrl.pathname = md5Hash;
     avatarPhotoUrl.searchParams.append("d", "identicon");
 
-    // creating the user token
-    const token = jwt.sign(
-      {
-        user_id: userId,
-        school_id: school.id
-      },
-      TOKEN_SECRET,
-      {
-        algorithm: "HS256",
-        expiresIn: USER_TOKEN_EXPIRATION
-      }
-    );
+    const isAdmin = userInfo.email.endsWith(BASIL_EMAIL_DOMAIN);
+
+    // creating a new jwt for the user account
+    const newUserToken = token.createUserToken(userInfo.email, isAdmin);
 
     const newUser: any = new userModel({
-      token,
-      id: userId,
-      role: userInfo.role,
-      school_id: school.id,
+      is_admin: isAdmin,
+      token: newUserToken,
       email: userInfo.email,
-      last_name: userInfo.last_name,
+      gender: userInfo.gender,
+      is_google_account: false,
       photo_url: avatarPhotoUrl.href,
-      first_name: userInfo.first_name,
+      display_name: userInfo.display_name,
+      date_of_birth: userInfo.date_of_birth,
+      username: userInfo.username.toLowerCase(),
       // generating a hashed password
-      hash: bcrypt.hashSync(userInfo.password, 9)
+      hash: bcrypt.hashSync(userInfo.password, SALT_LENGTH)
     });
 
-    try {
-      await newUser.save();
-    } catch (err) {
-      logger
-        .child({ error: err })
-        .error("Failed save account information to users collection");
-
-      throw err;
-    }
-
-    await accountSetup(newUser.id, newUser.email, school.id);
-
-    // deleting all invitations that were sent to the user under the email and school_id
-    await invitationModel.deleteMany({
-      email: {
-        $options: "i",
-        $regex: newUser.email
-      },
-      school_id: newUser.school_id
-    });
+    await newUser.save();
 
     // sending verification email to the user's inbox in order to verify their email address
     await sendVerificationEmail(newUser.email);
@@ -360,79 +254,10 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
   }
 };
 
-// interface for temporary authentication tokens
-interface DecoedTempToken {
-  email: string;
-  school_id: string;
-}
-
-/**
- * This function recieves a temporary json web token of the user's information to verify their account
- *
- * @param verificationToken This is a json web token
- */
-export const verifyAccount = async (
-  verificationToken: string
-): Promise<void> => {
-  try {
-    const decoedToken = jwt.verify(
-      verificationToken,
-      TOKEN_SECRET
-    ) as DecoedTempToken;
-
-    // updating the user information in the users collection
-    const status = await userModel.updateOne(
-      {
-        email: {
-          $options: "i",
-          $regex: decoedToken.email
-        },
-        school_id: decoedToken.school_id
-      },
-      {
-        $set: { verified: true }
-      }
-    );
-
-    if (status.n === 0) {
-      const fields = Object.assign({}, status, {
-        email: decoedToken.email,
-        school_id: decoedToken.school_id
-      });
-
-      logger
-        .child(fields)
-        .error("database query failed to update user account to verified");
-      return;
-    }
-  } catch (err) {
-    if (err.name === "TokenExpiredError") {
-      // if a token error occurs we would not care about it
-      return;
-    } else if (
-      err.message === "jwt malformed" ||
-      err.message === "invalid signature"
-    ) {
-      logger
-        .child({ error: err })
-        .warn("This json web token is not signed by the service secret");
-      return;
-    }
-
-    if (err instanceof Error) {
-      logger
-        .child({ error: err })
-        .error("Failed to update users account to be verified");
-    }
-
-    throw err;
-  }
-};
-
 /**
  * This function updates the user hash in the users collection
  *
- * @param userId The user if
+ * @param userId The user id
  * @param oldPassword The old user password
  * @param newPassword The new user password
  */
@@ -479,7 +304,7 @@ export const updatePassword = async (
     }
 
     // creating a new hash of the new user password
-    const hash = bcrypt.hashSync(newPassword, 9);
+    const hash = bcrypt.hashSync(newPassword, SALT_LENGTH);
 
     const status = await userModel.updateOne(
       { id: userId },
@@ -495,170 +320,6 @@ export const updatePassword = async (
   } catch (err) {
     if (err instanceof Error) {
       logger.child({ error: err }).error("Failed update user password");
-    }
-
-    throw err;
-  }
-};
-
-/**
- * This function update the user's hash on the new password and is authenticating/authorizing the user
- * by a temporary json web token being used the authenticate the user
- *
- * @param resetPasswordToken The temp json web token
- * @param oldPassword the old user password
- * @param newPassword the new user password
- */
-export const resetPassword = async (
-  resetPasswordToken: string,
-  newPassword: string
-): Promise<void> => {
-  try {
-    const decoedToken = jwt.verify(
-      resetPasswordToken,
-      TOKEN_SECRET
-    ) as DecoedTempToken;
-
-    const account = await userModel.findOne(
-      {
-        email: {
-          $options: "i",
-          $regex: decoedToken.email
-        },
-        school_id: decoedToken.school_id
-      },
-      { id: 1, hash: 1, deactivated: 1 }
-    );
-    if (account === null) {
-      logger
-        .child({ email: decoedToken.email, school_id: decoedToken.school_id })
-        .warn("user account was not found");
-
-      throw ErrorResponse(
-        AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION,
-        "This account does not exist",
-        { http_code: 400 }
-      );
-    }
-
-    if (!account.deactivated) {
-      throw ErrorResponse(
-        AuthenticationError.ACCOUNT_ACTIVATED_EXCEPTION,
-        "Account is already activated",
-        { http_code: 400 }
-      );
-    }
-
-    // checking if the new password is not the same as the old password
-    if (bcrypt.compareSync(newPassword, account.hash)) {
-      throw ErrorResponse(
-        AuthenticationError.UPDATE_PASSWORD_EXCEPTION,
-        "The new password is the same as the old password",
-        { http_code: 400 }
-      );
-    }
-
-    // checking if the new user password is unique
-    const err = uniquePassword(newPassword);
-    if (err) {
-      throw ErrorResponse(
-        AuthenticationError.UNIQUE_PASSWORD_EXCEPTION,
-        "Please check over your password",
-        { errors: err, http_code: 400 }
-      );
-    }
-
-    // creating a new hash of the new user password
-    const hash = bcrypt.hashSync(newPassword, 9);
-
-    const status = await userModel.updateOne(
-      { id: account.id },
-      {
-        $set: {
-          hash,
-          deactivated: false
-        }
-      }
-    );
-
-    if (status.n === 0) {
-      logger.child(status).debug("debugging update query");
-
-      throw new Error(
-        "Internal server error, failed to update the user hash and undeactivate the user account"
-      );
-    }
-  } catch (err) {
-    if (err.name === "TokenExpiredError") {
-      throw ErrorResponse(
-        TokenError.EXPIRED_TOKEN_EXCEPTION,
-        "Temporary reset password token expired",
-        { http_code: 401 }
-      );
-    } else if (
-      err.message === "jwt malformed" ||
-      err.message === "invalid signature"
-    ) {
-      throw ErrorResponse(
-        TokenError.INVALID_TOKEN_EXCEPTION,
-        "Temporary reset password token is invalid",
-        { http_code: 401 }
-      );
-    }
-
-    if (err instanceof Error) {
-      logger
-        .child({ error: err })
-        .error(
-          "Failed update user password and undeactivate the user's account"
-        );
-    }
-
-    throw err;
-  }
-};
-
-/**
- * This function reactivates the user's account using a temp json web token to
- * authenticate/authorize the user
- *
- * @param reactivationToken The temp reset password token
- */
-export const reactivateAccount = async (
-  reactivationToken: string
-): Promise<void> => {
-  try {
-    const decoedToken = jwt.verify(
-      reactivationToken,
-      TOKEN_SECRET
-    ) as DecoedTempToken;
-
-    const status = await userModel.updateOne(
-      {
-        email: {
-          $options: "i",
-          $regex: decoedToken.email
-        },
-        school_id: decoedToken.school_id
-      },
-      {
-        $set: { deactivated: false }
-      }
-    );
-
-    if (status.n === 0) {
-      logger
-        .child(status)
-        .warn("Faild to update the the user account from being deactivated");
-      return;
-    }
-  } catch (err) {
-    if (err.name === "TokenExpiredError" || err.message === "jwt malformed") {
-      return;
-    }
-
-    if (err instanceof Error) {
-      logger.child({ error: err }).error("Failed to reactivate user account");
     }
 
     throw err;
@@ -697,21 +358,13 @@ export const sendVerificationEmail = async (email: string): Promise<void> => {
     }
 
     // creating a temporary account verification token
-    const verificationTempToken = jwt.sign(
-      {
-        email: account.email,
-        school_id: account.school_id
-      },
-      TOKEN_SECRET,
-      {
-        algorithm: "HS256",
-        expiresIn: TEMP_TOKEN_EXPIRATION
-      }
-    );
+    const verificationTempToken = token.createTempToken({
+      email: account.email
+    });
 
     // creating a link to the verify api endpoint
-    const verificationLink = new URL(process.env.HOST);
-
+    // #TODO: Need to change this to the mobile application deep link
+    const verificationLink = new URL(HOST);
     verificationLink.protocol = process.env.IS_DOCKER ? "https" : "http";
     verificationLink.pathname = `/auth/verify/${verificationTempToken}`;
 
@@ -721,7 +374,7 @@ export const sendVerificationEmail = async (email: string): Promise<void> => {
       {
         from: NO_REPLY,
         to: account.email,
-        subject: "Pivot account verification"
+        subject: "Basil account verification"
       },
       {
         link: verificationLink.href
@@ -771,7 +424,9 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
 
     const status = await userModel.updateOne(
       { id: account.id },
-      { $set: { deactivated: true } }
+      {
+        $set: { deactivated: true }
+      }
     );
 
     if (status.n === 0) {
@@ -783,20 +438,13 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
     }
 
     // creating a temporary reset password/ account reactivation token
-    const resetPasswordToken = jwt.sign(
-      {
-        email: account.email,
-        school_id: account.school_id
-      },
-      TOKEN_SECRET,
-      {
-        algorithm: "HS256",
-        expiresIn: TEMP_TOKEN_EXPIRATION
-      }
-    );
+    const resetPasswordToken = token.createTempToken({
+      email: account.email
+    });
 
     // forming link to reset password api endpoint
-    const resetPasswordLink = new URL(WEB_APP_HOST);
+    // #TODO: Need to change this to the mobile application deep link
+    const resetPasswordLink = new URL(HOST);
     resetPasswordLink.protocol = process.env.IS_DOCKER ? "https" : "http";
     resetPasswordLink.pathname = `/auth/reset-password/${resetPasswordToken}`;
 
@@ -812,7 +460,7 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
       {
         from: NO_REPLY,
         to: account.email,
-        subject: "Password reset for account on pivot"
+        subject: "Password reset for account on basil"
       },
       {
         reactivation_link: resetPasswordLink.href,
@@ -822,6 +470,240 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
   } catch (err) {
     if (err instanceof Error) {
       logger.child({ error: err }).error("Failed to send reset password email");
+    }
+
+    throw err;
+  }
+};
+
+// interface for temporary authentication token
+interface DecoedTempToken {
+  email: string;
+}
+
+/**
+ * This function update the user's hash on the new password and is authenticating/authorizing the user
+ * by a temporary json web token being used the authenticate the user
+ *
+ * @param resetPasswordToken The temp json web token
+ * @param oldPassword the old user password
+ * @param newPassword the new user password
+ */
+export const resetPassword = async (
+  resetPasswordToken: string,
+  newPassword: string
+): Promise<void> => {
+  try {
+    const decoedToken = jwt.verify(
+      resetPasswordToken,
+      TOKEN_SECRET
+    ) as DecoedTempToken;
+
+    const account = await userModel.findOne(
+      {
+        email: {
+          $options: "i",
+          $regex: decoedToken.email
+        }
+      },
+      {
+        id: 1,
+        hash: 1,
+        deactivated: 1
+      }
+    );
+    if (account === null) {
+      logger
+        .child({
+          email: decoedToken.email
+        })
+        .warn("user account was not found");
+
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION,
+        "This account does not exist",
+        { http_code: 400 }
+      );
+    }
+
+    if (!account.deactivated) {
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_ACTIVATED_EXCEPTION,
+        "Account is activated",
+        { http_code: 400 }
+      );
+    }
+
+    // checking if the new password is not the same as the old password
+    if (bcrypt.compareSync(newPassword, account.hash)) {
+      throw ErrorResponse(
+        AuthenticationError.UPDATE_PASSWORD_EXCEPTION,
+        "The new password is the same as the old password",
+        { http_code: 400 }
+      );
+    }
+
+    // checking if the new user password is unique
+    const err = uniquePassword(newPassword);
+    if (err) {
+      throw ErrorResponse(
+        AuthenticationError.UNIQUE_PASSWORD_EXCEPTION,
+        "Please check over your password",
+        { errors: err, http_code: 400 }
+      );
+    }
+
+    // creating a new hash of the new user password
+    const newUserHash = bcrypt.hashSync(newPassword, SALT_LENGTH);
+
+    const status = await userModel.updateOne(
+      { id: account.id },
+      {
+        $set: {
+          hash: newUserHash,
+          deactivated: false
+        }
+      }
+    );
+
+    if (status.n === 0) {
+      logger.child(status).debug("debugging update query");
+
+      throw new Error(
+        "Internal server error, failed to update the user hash and undeactivate the user account"
+      );
+    }
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      throw ErrorResponse(
+        TokenError.EXPIRED_TOKEN_EXCEPTION,
+        "Temporary reset password token expired",
+        { http_code: 401 }
+      );
+    } else if (
+      err.message === "jwt malformed" ||
+      err.message === "invalid signature"
+    ) {
+      throw ErrorResponse(
+        TokenError.INVALID_TOKEN_EXCEPTION,
+        "Temporary reset password token is invalid",
+        { http_code: 401 }
+      );
+    }
+
+    if (err instanceof Error) {
+      logger
+        .child({ error: err })
+        .error(
+          "Failed update user password and undeactivate the user's account"
+        );
+    }
+
+    throw err;
+  }
+};
+
+/**
+ * This function recieves a temporary json web token of the user's information to verify their account
+ *
+ * @param verificationToken This is a json web token
+ */
+export const verifyAccount = async (
+  verificationToken: string
+): Promise<void> => {
+  try {
+    const decoedToken = jwt.verify(
+      verificationToken,
+      TOKEN_SECRET
+    ) as DecoedTempToken;
+
+    // updating the user information in the users collection
+    const status = await userModel.updateOne(
+      {
+        email: {
+          $options: "i",
+          $regex: decoedToken.email
+        }
+      },
+      {
+        $set: { verified: true }
+      }
+    );
+
+    if (status.n === 0) {
+      const fields = Object.assign({}, status, {
+        email: decoedToken.email
+      });
+
+      logger
+        .child(fields)
+        .error("database query failed to update user account to verified");
+      return;
+    }
+  } catch (err) {
+    if (err.name === "TokenExpiredError") {
+      // if a token error occurs we would not care about it
+      return;
+    } else if (
+      err.message === "jwt malformed" ||
+      err.message === "invalid signature"
+    ) {
+      logger
+        .child({ error: err })
+        .warn("This json web token is not signed by the service secret");
+      return;
+    }
+
+    if (err instanceof Error) {
+      logger
+        .child({ error: err })
+        .error("Failed to update users account to be verified");
+    }
+
+    throw err;
+  }
+};
+
+/**
+ * This function reactivates the user's account using a temp json web token to
+ * authenticate/authorize the user
+ *
+ * @param reactivationToken The temp reset password token
+ */
+export const reactivateAccount = async (
+  reactivationToken: string
+): Promise<void> => {
+  try {
+    const decoedToken = jwt.verify(
+      reactivationToken,
+      TOKEN_SECRET
+    ) as DecoedTempToken;
+
+    const status = await userModel.updateOne(
+      {
+        email: {
+          $options: "i",
+          $regex: decoedToken.email
+        }
+      },
+      {
+        $set: { deactivated: false }
+      }
+    );
+
+    if (status.n === 0) {
+      logger
+        .child(status)
+        .warn("Faild to update the the user account from being deactivated");
+      return;
+    }
+  } catch (err) {
+    if (err.name === "TokenExpiredError" || err.message === "jwt malformed") {
+      return;
+    }
+
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to reactivate user account");
     }
 
     throw err;

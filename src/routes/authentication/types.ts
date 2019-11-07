@@ -1,32 +1,34 @@
 export interface UserAccount {
   id: string;
-  hash: string;
-  role: string;
+  hash?: string;
   token: string;
   email: string;
+  gender: string;
+  username: string;
+  is_admin: boolean;
   verified: boolean;
-  last_name: string;
   photo_url: string;
-  school_id: string;
   created_at: string;
-  first_name: string;
   deactivated: boolean;
+  display_name: string;
   description?: string;
+  date_of_birth: string;
   last_login_at?: string;
+  is_google_account: boolean;
 }
 
 export interface AccountCredentials {
-  role: string;
+  email: string;
   token: string;
   user_id: string;
-  school_id: string;
+  is_admin: boolean;
 }
 
 export interface NewUserInfo {
-  role: string;
   email: string;
+  gender: string;
+  username: string;
   password: string;
-  last_name: string;
-  first_name: string;
-  school_name: string;
+  display_name: string;
+  date_of_birth: string;
 }

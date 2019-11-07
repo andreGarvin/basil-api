@@ -25,12 +25,7 @@ const headerFilter = (
 };
 
 // the list of headers we want to filter in the logs
-const headerFilters: string[] = [
-  "authorization",
-  "x-api-key",
-  "x-token",
-  "cookie"
-];
+const headerFilters: string[] = ["authorization", "x-token", "cookie"];
 
 /**
  * This is the express http logger. This logs all incoming http

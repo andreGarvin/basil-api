@@ -1,5 +1,7 @@
 import * as jwt from "jsonwebtoken";
 
+import * as dateFn from "date-fns";
+
 // models
 import userModel from "../model";
 
@@ -8,19 +10,67 @@ import ErrorResponse from "../../../common/utils/error";
 import logger from "../../../common/logger";
 
 // config
-import { USER_TOKEN_EXPIRATION, TOKEN_SECRET } from "../../../config";
+import {
+  USER_TOKEN_EXPIRATION,
+  TEMP_TOKEN_EXPIRATION,
+  TOKEN_SECRET
+} from "../../../config";
 
 // error codes
 import AuthenticationError from "../error-codes";
 import TokenError from "./error-codes";
 
 // types
-import {
-  TokenAuthenticationResponse,
-  RefreshedToken,
-  DecodedToken
-} from "./types";
+import { TokenAuthenticationResponse, DecodedToken } from "./types";
 import { UserAccount } from "../types";
+
+/**
+ * This function generates a new user jwt and adds
+ * the user's email and admin status to the jwt
+ *
+ * @param email The user email
+ * @param isAdmin The user's admin status
+ */
+export function createUserToken(email: string, isAdmin?: boolean): string {
+  const expiresAt = dateFn.addDays(
+    new Date(),
+    parseInt(USER_TOKEN_EXPIRATION, 10)
+  );
+
+  return jwt.sign(
+    {
+      email,
+      is_admin: isAdmin || false,
+      expires_at: expiresAt.toString()
+    },
+    TOKEN_SECRET,
+    {
+      algorithm: "HS256",
+      expiresIn: USER_TOKEN_EXPIRATION
+    }
+  );
+}
+
+/**
+ * This function creates a temporary jwt for temporary informattion that needs to be signed
+ * and verified if returned back to the service
+ *
+ * @param context This can be anything
+ */
+export const createTempToken = (context: any): string => {
+  try {
+    return jwt.sign(context, TOKEN_SECRET, {
+      algorithm: "HS256",
+      expiresIn: TEMP_TOKEN_EXPIRATION
+    });
+  } catch (err) {
+    if (err instanceof Error) {
+      logger.child({ error: err }).error("Failed to create temp token");
+    }
+
+    throw err;
+  }
+};
 
 /**
  * This function authenticates user tokens
@@ -31,13 +81,27 @@ export const authenticate = async (
   token: string
 ): Promise<TokenAuthenticationResponse> => {
   try {
+    // decoding and verifying user token
     const decoedToken = jwt.verify(token, TOKEN_SECRET) as DecodedToken;
 
     // fetching the user account information
-    const user: UserAccount = await userModel.findOne({
-      id: decoedToken.user_id,
-      school_id: decoedToken.school_id
-    });
+    const user: UserAccount = await userModel.findOne(
+      {
+        email: {
+          $options: "i",
+          $regex: decoedToken.email
+        },
+        is_admin: decoedToken.is_admin
+      },
+      {
+        id: 1,
+        email: 1,
+        token: 1,
+        is_admin: 1,
+        verified: 1,
+        deactivated: 1
+      }
+    );
     if (user === null) {
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION,
@@ -63,8 +127,11 @@ export const authenticate = async (
     }
 
     return {
-      user_id: decoedToken.user_id,
-      school_id: decoedToken.school_id
+      user_id: user.id,
+      email: user.email,
+      is_admin: user.is_admin,
+      // this is a warning to refresh the user jwt
+      should_refresh_token: dateFn.isTomorrow(decoedToken.expires_at)
     };
   } catch (err) {
     if (err.name === "TokenExpiredError") {
@@ -93,7 +160,9 @@ export const authenticate = async (
     }
 
     if (err instanceof Error) {
-      logger.child({ error: err }).error("Failed to verify user token");
+      logger
+        .child({ error: err })
+        .error("Failed to authenticate the user token");
     }
 
     throw err;
@@ -101,13 +170,20 @@ export const authenticate = async (
 };
 
 /**
- * This function refreshs a useer token
+ * This function refreshes a user token
  *
- * @param token The user token
+ * @param  userId the id of the user in the users collection
  */
-export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
+export const refreshToken = async (userId: string): Promise<string> => {
   try {
-    const user: UserAccount = await userModel.findOne({ id: userId });
+    const user: UserAccount = await userModel.findOne(
+      { id: userId },
+      {
+        id: 1,
+        email: 1,
+        is_admin: 1
+      }
+    );
     if (user === null) {
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION,
@@ -116,33 +192,23 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
       );
     }
 
-    // generating a new token
-    const refreshedToken: string = jwt.sign(
-      {
-        user_id: user.id,
-        school_code: user.school_id
-      },
-      TOKEN_SECRET,
-      {
-        algorithm: "HS256",
-        expiresIn: USER_TOKEN_EXPIRATION
-      }
-    );
+    // generating a new jwt
+    const refreshedToken: string = createUserToken(user.email, user.is_admin);
 
     const status = await userModel.updateOne(
       {
-        id: user.id,
-        school_id: user.school_id
+        id: user.id
       },
       {
-        $set: { token: refreshedToken }
+        $set: {
+          token: refreshedToken
+        }
       }
     );
 
     if (status.n === 0) {
       const fields = Object.assign({}, status, {
-        id: user.id,
-        school_id: user.school_id
+        user_id: user.id
       });
 
       logger.child(fields).debug("debugging update query");
@@ -152,11 +218,7 @@ export const refreshToken = async (userId: string): Promise<RefreshedToken> => {
       );
     }
 
-    return {
-      user_id: user.id,
-      school_id: user.school_id,
-      refreshed_token: refreshedToken
-    };
+    return refreshedToken;
   } catch (err) {
     if (err instanceof Error) {
       logger.child({ error: err }).error("Failed refresh token");

@@ -1,13 +1,13 @@
 // models
 import directMessageMemberModel from "./member/models/direct-message-member";
-import workspaceMemberModel from "../workspace/member/model";
+// import workspaceMemberModel from "../workspace/member/model";
 import groupMemberModel from "./member/models/group-member";
 import directMessageModel from "./models/direct-message";
 import userModel from "../authentication/model";
 import groupModel from "./models/group";
 
 // modules
-import * as messengerMember from "./member/index";
+// import * as messengerMember from "./member/index";
 
 // utils
 import Pagination from "../../common/utils/pagination";
@@ -15,7 +15,7 @@ import ErrorResponse from "../../common/utils/error";
 import logger from "../../common/logger";
 
 // error codes
-import WorkspaceMemberError from "../workspace/member/error-codes";
+// import WorkspaceMemberError from "../workspace/member/error-codes";
 import { GroupError, DirectMessageError } from "./error-codes";
 
 // types
@@ -122,19 +122,18 @@ export const createDirectMessage = async (
 
     if (userId !== memberUserId) {
       // checking if the other member is a user of the workspace
-      const memberInfo = await workspaceMemberModel.findOne({
-        user_id: memberUserId,
-        workspace_id: workspaceId
-      });
-      if (memberInfo === null || memberInfo.removed) {
-        throw ErrorResponse(
-          WorkspaceMemberError.WORKSPACE_MEMBER_NOT_FOUND_EXCEPTION,
-          "this workspace member does not exist",
-          { http_code: 400 }
-        );
-      }
-
-      members.push(memberUserId);
+      // const memberInfo = await workspaceMemberModel.findOne({
+      //   user_id: memberUserId,
+      //   workspace_id: workspaceId
+      // });
+      // if (memberInfo === null || memberInfo.removed) {
+      //   throw ErrorResponse(
+      //     WorkspaceMemberError.WORKSPACE_MEMBER_NOT_FOUND_EXCEPTION,
+      //     "this workspace member does not exist",
+      //     { http_code: 400 }
+      //   );
+      // }
+      // members.push(memberUserId);
     }
 
     // checking if the direct message already exist
@@ -160,7 +159,6 @@ export const createDirectMessage = async (
 
     // creating a new direct message
     const newDirectMessage = new directMessageModel({
-      members,
       workspace_id: workspaceId
     });
 
@@ -168,7 +166,6 @@ export const createDirectMessage = async (
     await newDirectMessage.save();
 
     return {
-      members,
       id: newDirectMessage.id,
       is_direct_message: true,
       archived: newDirectMessage.archived,
@@ -499,10 +496,10 @@ export const archiveGroup = async (
       }
     );
     if (group === null) {
-      throw ErrorResponse(
-        WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
-        "only the creator of this workspace can archive this group"
-      );
+      // throw ErrorResponse(
+      //   WorkspaceMemberError.WORKSPACE_MEMBER_PREMISSION_EXCEPTION,
+      //   "only the creator of this workspace can archive this group"
+      // );
     }
 
     const status = await groupModel.updateOne(
@@ -560,16 +557,15 @@ export const getGroupInfo = async (
 
     let isGroupAdmin: boolean;
     if (groupInfo.is_channel) {
-      const workspaceMemberInfo = await workspaceMemberModel.findOne(
-        {
-          user_id: userId
-        },
-        {
-          is_admin: 1
-        }
-      );
-
-      isGroupAdmin = workspaceMemberInfo.is_admin;
+      // const workspaceMemberInfo = await workspaceMemberModel.findOne(
+      //   {
+      //     user_id: userId
+      //   },
+      //   {
+      //     is_admin: 1
+      //   }
+      // );
+      // isGroupAdmin = workspaceMemberInfo.is_admin;
     } else {
       const groupMemberInfo = await groupMemberModel.findOne(
         {
@@ -640,15 +636,15 @@ export const getDirectMessageInfo = async (
       );
     }
 
-    const workspaceMemberInfo = await workspaceMemberModel.findOne(
-      {
-        user_id: member.user_id
-      },
-      {
-        status: 1,
-        is_admin: 1
-      }
-    );
+    // const workspaceMemberInfo = await workspaceMemberModel.findOne(
+    //   {
+    //     user_id: member.user_id
+    //   },
+    //   {
+    //     status: 1,
+    //     is_admin: 1
+    //   }
+    // );
 
     const userInfo = await userModel.findOne(
       {
@@ -669,11 +665,11 @@ export const getDirectMessageInfo = async (
       workspace_id: directMessageInfo.workspace_id,
       member: {
         email: userInfo.email,
-        photo_url: userInfo.photo_url,
-        status: workspaceMemberInfo.status,
-        is_active: workspaceMemberInfo.is_active,
-        is_workspace_admin: workspaceMemberInfo.is_admin,
-        name: `${userInfo.first_name} ${userInfo.last_name}`
+        name: userInfo.username,
+        photo_url: userInfo.photo_url
+        // status: workspaceMemberInfo.status,
+        // is_active: workspaceMemberInfo.is_active,
+        // is_workspace_admin: workspaceMemberInfo.is_admin,
       }
     };
   } catch (err) {
@@ -683,15 +679,15 @@ export const getDirectMessageInfo = async (
   }
 };
 
-export const getGroups = async (
-  userId: string,
-  workspaceId: string
-): Promise<void> => {
-  try {
-    const;
-  } catch (err) {
-    logger
-      .child({ error: err })
-      .error("Failed to return the list of groups the user is a member of");
-  }
-};
+// export const getGroups = async (
+//   userId: string,
+//   workspaceId: string
+// ): Promise<void> => {
+//   try {
+//     const;
+//   } catch (err) {
+//     logger
+//       .child({ error: err })
+//       .error("Failed to return the list of groups the user is a member of");
+//   }
+// };

@@ -1,7 +1,9 @@
 import { Document, Schema, model } from "mongoose";
 
-// module
-import { InvitationRoles } from "../invitation";
+import * as uuid from "uuid/v4";
+
+// config
+import { HOST } from "../../config";
 
 // types
 import { UserAccount } from "../authentication/types";
@@ -14,17 +16,22 @@ export interface UserModel extends UserAccount, Document {
 const userSchema = new Schema({
   // the user id
   id: {
-    required: true,
+    default: () => {
+      // generating a user id
+      return uuid(HOST, uuid.URL)
+        .split("-")
+        .join("");
+    },
     type: String
   },
 
-  // the user's hash
+  // the user's hashed password
   hash: {
-    required: true,
+    default: "",
     type: String
   },
 
-  // this is the user jwt token
+  // this user jwt token for authenticating with the service
   token: {
     required: true,
     type: String
@@ -36,53 +43,66 @@ const userSchema = new Schema({
     type: String
   },
 
-  // the id of the school the user account is under
-  school_id: {
+  // weather or not the user create their account under google
+  is_google_account: {
+    default: false,
+    type: Boolean
+  },
+
+  gender: {
+    default: "other",
     required: true,
     type: String
   },
 
-  // the role of the user in the school
-  role: {
-    default: "student",
+  date_of_birth: {
+    required: true,
+    type: Date
+  },
+
+  // the user's avatar name
+  username: {
     required: true,
     type: String
   },
 
-  // the user account being verified
+  // the user's display name
+  display_name: {
+    type: String,
+    default: ""
+  },
+
+  // if the user is a admin of the platform
+  is_admin: {
+    default: false,
+    type: Boolean
+  },
+
+  // weather or not the user's email has been verified
   verified: {
     default: false,
     type: Boolean
   },
 
-  // if the user's account has been deactivated
+  // weather or not the user's account has been deactivated
   deactivated: {
     default: false,
     type: Boolean
   },
 
-  // a time stamp of when the user last logged into their account
+  // a time stamp the last time the user logged into their account
   last_login_at: {
-    default: null,
-    type: Date
-  },
-
-  // The users profile photo url
-  photo_url: String,
-
-  // user first name
-  first_name: {
-    required: true,
+    default: "",
     type: String
   },
 
-  // user clast name
-  last_name: {
-    required: true,
+  // a url of the user's profile photo
+  photo_url: {
+    default: "",
     type: String
   },
 
-  // the user's bio description of the user
+  // the user's bio description of their profile
   description: {
     default: "",
     type: String

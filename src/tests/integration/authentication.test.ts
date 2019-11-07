@@ -1,15 +1,16 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import ava, { TestInterface } from "ava";
+import test from "ava";
+
 import * as request from "supertest";
 import * as jwt from "jsonwebtoken";
 import * as bcrypt from "bcryptjs";
+import * as dateFn from "date-fns";
 
 // error codes
 import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
-import RegistryError from "../../routes/registry/error-codes";
 
 // types
 import { DecodedToken } from "../../routes/authentication/token/types";
@@ -17,56 +18,31 @@ import { DecodedToken } from "../../routes/authentication/token/types";
 // database helper functions
 import * as db from "../helper";
 
-interface Context {
-  school: {
-    id: string;
-    name: string;
-    domain: string;
-  };
-}
-const test = ava as TestInterface<Context>;
-
 // config
 import {
-  TOKEN_SECRET,
+  ValidationJsonResponse,
   TEMP_TOKEN_EXPIRATION,
-  ValidationJsonResponse
+  USER_TOKEN_EXPIRATION,
+  TOKEN_SECRET,
+  MAX_FILE_SIZE,
+  MAX_USERNAME_LENGTH
 } from "../../config";
 const validationJsonResponse = ValidationJsonResponse();
 
-import { InvitationRoles } from "../../routes/invitation";
-
 import app from "../../index";
+import UserError from "../../routes/user/error-codes";
 
-// before each test create user, school and pass the context to the all the test of the user and the school
-test.beforeEach(async t => {
-  // generated a new random school
-  const generatedSchool = await db.createSchool();
-
-  t.context.school = {
-    id: generatedSchool.id,
-    name: generatedSchool.name,
-    domain: generatedSchool.domain
-  };
+test.before(async t => {
+  await db.clearUsers();
 });
-
 test.afterEach.always(async t => {
-  await db.clearInvitations();
-
-  await db.clearRegistry();
-
   await db.clearUsers();
 });
 
-test("/auth/create (account defaults to student)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain
-  );
+test("/auth/create", async t => {
+  const mockUser = db.createMockUserInfo();
 
   mockUser.password = "@Foobarb3z1";
-
-  delete mockUser.role;
 
   const response = await request(app)
     .post("/auth/create")
@@ -79,6 +55,12 @@ test("/auth/create (account defaults to student)", async t => {
   // checking if the user account was created
   const account = await db.findUserByEmail(mockUser.email);
 
+  t.not(
+    account.username,
+    account.username.toUpperCase(),
+    "the username is has not uppercase characters"
+  );
+
   t.is(account.email, mockUser.email, "email should match mock user email");
 
   t.false(account.verified, "the account should not be verified");
@@ -87,16 +69,9 @@ test("/auth/create (account defaults to student)", async t => {
 
   t.true(comparison, "hash and password should match");
 
-  t.is(
-    `${account.first_name} ${account.last_name}`,
-    `${mockUser.first_name} ${mockUser.last_name}`
-  );
+  t.is(account.display_name, mockUser.display_name);
 
-  t.is(
-    account.role,
-    InvitationRoles.STUDENT,
-    "created user should have admin role"
-  );
+  t.false(account.is_admin, "created user should not be a admin");
 
   t.not(
     account.token,
@@ -104,11 +79,11 @@ test("/auth/create (account defaults to student)", async t => {
     "user token should exist under the user account"
   );
 
-  const decoedToken = (await jwt.decode(account.token)) as DecodedToken;
+  const decoedToken = jwt.decode(account.token) as DecodedToken;
 
-  t.is(decoedToken.school_id, t.context.school.id, "same school id");
+  t.is(decoedToken.email, account.email, "same user email");
 
-  t.is(decoedToken.user_id, account.id, "same user id");
+  t.false(decoedToken.is_admin);
 });
 
 test("/auth/create (sending invalid data)", async t => {
@@ -117,7 +92,7 @@ test("/auth/create (sending invalid data)", async t => {
     .send({
       password: [],
       first_name: "",
-      role: "SUPER_AMDIN",
+      username: 1234433,
       schoolCode: "sndi3uid9",
       email: "myemailissupercool"
     });
@@ -129,254 +104,100 @@ test("/auth/create (sending invalid data)", async t => {
   t.is(response.body.error_code, validationJsonResponse.error_code);
 });
 
-test("/auth/create (creating a admin account)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+test("/auth/create (a email with the basil domain)", async t => {
+  const mockUser = db.createMockUserInfo();
 
-  user.password = "@Foobarb3z1";
-
-  await db.createInvitation(user.email, user.role, t.context.school.id);
+  mockUser.password = "@Foobarb3z1";
+  mockUser.email = `jondoe@${process.env.BASIL_EMAIL_DOMAIN}`;
 
   const response = await request(app)
     .post("/auth/create")
-    .send(user);
+    .send(mockUser);
 
   t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 201, "should return status code of 201");
 
   // checking if the user account was created
-  const account = await db.findUserByEmail(user.email);
+  const account = await db.findUserByEmail(mockUser.email);
 
-  t.false(account.verified, "the account should not be verified");
-
-  const comparison = bcrypt.compareSync(user.password, account.hash);
-
-  t.true(comparison, "hash and password should match");
-
-  t.is(
-    `${account.first_name} ${account.last_name}`,
-    `${user.first_name} ${user.last_name}`
-  );
-
-  t.is(account.role, user.role, "created user should have admin role");
-
-  t.not(
-    account.token,
-    undefined,
-    "user token should exist under the user account"
-  );
-
-  const decoedToken = (await jwt.decode(account.token)) as DecodedToken;
-
-  t.is(decoedToken.school_id, t.context.school.id, "same school id");
-
-  t.is(decoedToken.user_id, account.id, "same user id");
+  t.true(account.is_admin, "created user should have admin account");
 });
 
-test("/auth/create (creating a professor account)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
-
-  user.password = "@Foobarb3z1";
-
-  await db.createInvitation(user.email, user.role, t.context.school.id);
+test("/auth/create (creating another account, but a google account exist)", async t => {
+  const user = await db.createUser({
+    password: "",
+    is_google_account: true,
+    email: "johndoe@gmail.com"
+  });
 
   const response = await request(app)
     .post("/auth/create")
-    .send(user);
-
-  t.log(JSON.stringify(response, null, 4));
-
-  t.is(response.status, 201, "should return status code of 201");
-
-  // checking if the user account was created
-  const account = await db.findUserByEmail(user.email);
-
-  t.false(account.verified, "the account should not be verified");
-
-  t.is(account.role, user.role, "created user should have admin role");
-});
-
-test("/auth/create (creating a professor account, but no professor invitation exist)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
-
-  const response = await request(app)
-    .post("/auth/create")
-    .send(user);
+    .send({
+      email: user.email,
+      password: "@Foobarb3z1",
+      username: user.username,
+      display_name: user.display_name,
+      date_of_birth: user.date_of_birth
+    });
 
   t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
-  // checking if the user accoutn was created
-  const account = await db.findUserByEmail(user.email);
-
-  t.is(account, null, "user account should not exist");
-
-  t.is(response.body.error_code, AuthenticationError.USER_ROLE_EXCEPTION);
+  t.is(response.body.error_code, AuthenticationError.ACCOUNT_EXIST_EXCEPTION);
 });
 
-test("/auth/create (creating a professor account, but setting the role as a admin)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
+test("/auth/create (creating a user account, but the username is longer then 30 characters)", async t => {
+  const mockUser = db.createMockUserInfo();
 
-  await db.createInvitation(user.email, t.context.school.id, user.role);
-
-  // changing the role of the user for creating a account
-  user.role = "admin";
+  mockUser.password = "@Foobarb3z1";
+  mockUser.username = "a".repeat(MAX_USERNAME_LENGTH + 1);
 
   const response = await request(app)
     .post("/auth/create")
-    .send(user);
+    .send({
+      email: mockUser.email,
+      password: mockUser.password,
+      username: mockUser.username,
+      display_name: mockUser.display_name,
+      date_of_birth: mockUser.date_of_birth
+    });
 
   t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
-  // checking if the user accoutn was created
-  const account = await db.findUserByEmail(user.email);
-
-  t.is(account, null, "user account should exist");
-
-  t.is(response.body.error_code, AuthenticationError.USER_ROLE_EXCEPTION);
+  t.is(response.body.error_code, UserError.MAX_USERNAME_LENGTH_EXCEPTION);
 });
 
-test("/auth/create (creating a student account, but setting the role as a admin)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
+test("/auth/create (creating a account, but the username is taken)", async t => {
+  const user = await db.createUser();
 
-  // changing the role of the user for creating a account
-  user.role = "admin";
+  const mockeUser = db.createMockUserInfo();
+
+  mockeUser.password = "@Foobarb3z1";
+  mockeUser.username = user.username;
 
   const response = await request(app)
     .post("/auth/create")
-    .send(user);
+    .send({
+      email: mockeUser.email,
+      password: mockeUser.password,
+      username: mockeUser.username,
+      display_name: mockeUser.display_name,
+      date_of_birth: mockeUser.date_of_birth
+    });
 
   t.log(JSON.stringify(response, null, 4));
 
   t.is(response.status, 400, "should return status code of 400");
 
-  // checking if the user accoutn was created
-  const account = await db.findUserByEmail(user.email);
-
-  t.is(account, null, "user account should exist");
-
-  t.is(response.body.error_code, AuthenticationError.USER_ROLE_EXCEPTION);
+  t.is(response.body.error_code, UserError.USERNAME_EXIST_EXCEPTION);
 });
 
-test("/auth/create (creating a account, but providing school name that does not exist)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
-
-  user.school_name = "undefined";
-
-  const response = await request(app)
-    .post("/auth/create")
-    .send(user);
-
-  t.log(JSON.stringify(response, null, 4));
-
-  t.is(response.status, 400, "should return status code of 400");
-
-  // checking if the user accoutn was created
-  const account = await db.findUserByEmail(user.email);
-
-  t.is(account, null, "user account should not exist");
-
-  t.is(response.body.error_code, RegistryError.SCHOOL_NOT_FOUND_EXCEPTION);
-});
-
-test("/auth/create (creating a account, but the email that does not match the school domain email)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
-
-  await db.createInvitation(user.email, user.role, t.context.school.id);
-
-  // changing the email of the admin to a non university email
-  user.email = `${user.first_name}${user.last_name}@gmail.com`;
-
-  const response = await request(app)
-    .post("/auth/create")
-    .send(user);
-
-  t.log(JSON.stringify(response, null, 4));
-
-  t.is(response.status, 400, "should return status code of 400");
-
-  // checking if the user accoutn was created
-  const account = await db.findUserByEmail(user.email);
-
-  t.is(account, null, "user account should exist");
-
-  t.is(response.body.error_code, RegistryError.DOMAIN_EXCEPTION);
-});
-
-test("/auth/create (creating a user account twice)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
-
-  user.password = "@FoodbarB4z1";
-
-  await db.createInvitation(user.email, user.role, t.context.school.id);
-
-  const response = await request(app)
-    .post("/auth/create")
-    .send(user);
-
-  t.log(JSON.stringify(response, null, 4));
-
-  t.is(response.status, 201, "should return a status code of 201");
-
-  const account = await db.findUserByEmail(user.email);
-
-  t.not(account, null, "user account should exist");
-
-  const responseTwo = await request(app)
-    .post("/auth/create")
-    .send(user);
-
-  t.log(JSON.stringify(responseTwo, null, 4));
-
-  t.is(responseTwo.status, 400, "should return a status code of 400");
-
-  t.is(
-    responseTwo.body.error_code,
-    AuthenticationError.ACCOUNT_EXIST_EXCEPTION
-  );
-});
-
-test("/auth/create (creating a account, but checking the password uniqueness)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+test("/auth/create (creating a account, but failed password uniqueness)", async t => {
+  const user = db.createMockUserInfo();
 
   user.password = "some-weak-ass-password";
 
@@ -398,9 +219,7 @@ test("/auth/create (creating a account, but checking the password uniqueness)", 
 
 test("/auth/verify/:verification_id", async t => {
   const userAccount = await db.createUser({
-    verified: false,
-    role: InvitationRoles.ADMIN,
-    school_id: t.context.school.id
+    verified: false
   });
 
   // checking if the user accoutn was created
@@ -410,8 +229,7 @@ test("/auth/verify/:verification_id", async t => {
 
   const verificationToken = jwt.sign(
     {
-      email: userAccount.email,
-      school_id: userAccount.school_id
+      email: userAccount.email
     },
     TOKEN_SECRET,
     {
@@ -440,9 +258,7 @@ test("/auth/verify/:verification_id", async t => {
 
 test("/auth/verify/:verification_id (verifying account with a invaild temp verification token)", async t => {
   const userAccount = await db.createUser({
-    verified: false,
-    role: InvitationRoles.STUDENT,
-    school_id: t.context.school.id
+    verified: false
   });
 
   const responseTwo = await request(app).get("/auth/verify/foobarbaz");
@@ -463,17 +279,14 @@ test("/auth/verify/:verification_id (verifying account with a invaild temp verif
 
 test("/auth/verify/:verification_id (verifying a account with a expired token)", async t => {
   const userAccount = await db.createUser({
-    verified: false,
-    role: InvitationRoles.ADMIN,
-    school_id: t.context.school.id
+    verified: false
   });
 
   const verificationToken = jwt.sign(
     {
-      email: userAccount.email,
-      school_id: userAccount.school_id
+      email: userAccount.email
     },
-    process.env.JSON_WEB_TOKEN_SECERT,
+    TOKEN_SECRET,
     {
       algorithm: "HS256",
       expiresIn: "1ms"
@@ -500,9 +313,7 @@ test("/auth/verify/:verification_id (verifying a account with a expired token)",
 
 test("/auth/send/verification", async t => {
   const userAccount = await db.createUser({
-    verified: false,
-    school_id: t.context.school.id,
-    role: InvitationRoles.PROFESSOR
+    verified: false
   });
 
   const response = await request(app)
@@ -529,14 +340,11 @@ test("/auth/send/verification (sending invalid data)", async t => {
 });
 
 test("/auth/send/verification (sending a email verification, but the user does not exist account)", async t => {
-  const user = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const [randomEmail] = db.generateRandomUserEmails(1);
+
   const responseTwo = await request(app)
     .post("/auth/send/verification")
-    .send({ email: user.email });
+    .send({ email: randomEmail });
 
   t.is(responseTwo.status, 200, "This should return a status code of 200");
 
@@ -546,10 +354,7 @@ test("/auth/send/verification (sending a email verification, but the user does n
 });
 
 test("/auth/send/verification (sending a email verification, but the user account is verified)", async t => {
-  const userAccount = await db.createUser({
-    school_id: t.context.school.id,
-    role: InvitationRoles.PROFESSOR
-  });
+  const userAccount = await db.createUser();
 
   const response = await request(app)
     .post("/auth/send/verification")
@@ -565,10 +370,7 @@ test("/auth/send/verification (sending a email verification, but the user accoun
 });
 
 test("/auth/send/verification (sending a email verification, but the user account has been deactivated)", async t => {
-  const userAccount = await db.createUser({
-    school_id: t.context.school.id,
-    role: InvitationRoles.PROFESSOR
-  });
+  const userAccount = await db.createUser();
 
   await db.updateUserInfo(userAccount.email, { deactivated: true });
 
@@ -586,24 +388,17 @@ test("/auth/send/verification (sending a email verification, but the user accoun
 });
 
 test("/auth/authenticate", async t => {
-  const mockUserData = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
-    Object.assign(mockUserData, {
-      verified: true,
-      school_id: t.context.school.id
-    })
+    Object.assign(mockUser, { verified: true })
   );
 
   const response = await request(app)
     .post("/auth/authenticate")
     .send({
-      email: mockUserData.email,
-      password: mockUserData.password
+      email: newUser.email,
+      password: mockUser.password
     });
 
   t.log(JSON.stringify(response, null, 4));
@@ -613,10 +408,10 @@ test("/auth/authenticate", async t => {
   t.deepEqual(
     response.body,
     {
-      role: newUser.role,
       user_id: newUser.id,
+      email: newUser.email,
       token: newUser.token,
-      school_id: newUser.school_id
+      is_admin: newUser.is_admin
     },
     "This should return backa json body of the user credentail data"
   );
@@ -638,11 +433,7 @@ test("/auth/authenticate (sending invalid data)", async t => {
 });
 
 test("/auth/authenticate (user account does not exist)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const response = await request(app)
     .post("/auth/authenticate")
@@ -662,26 +453,18 @@ test("/auth/authenticate (user account does not exist)", async t => {
 });
 
 test("/auth/authenticate (user password is incorrect)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
-
-  await db.createUser(
-    Object.assign(mockUser, { school_id: t.context.school.id })
-  );
+  const newUser = await db.createUser();
 
   const response = await request(app)
     .post("/auth/authenticate")
     .send({
-      email: mockUser.email,
+      email: newUser.email,
       password: "SOME_DANK_ASS_PASSWORD"
     });
 
   t.log(JSON.stringify(response, null, 4));
 
-  t.is(response.status, 400, "should return status code of 401");
+  t.is(response.status, 401, "should return status code of 401");
 
   t.deepEqual(
     response.body.error_code,
@@ -690,15 +473,9 @@ test("/auth/authenticate (user password is incorrect)", async t => {
 });
 
 test("/auth/authenticate (user account is not verified)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
+  const mockUser = db.createMockUserInfo();
 
-  await db.createUser(
-    Object.assign(mockUser, { school_id: t.context.school.id, verified: false })
-  );
+  await db.createUser(Object.assign(mockUser, { verified: false }));
 
   const response = await request(app)
     .post("/auth/authenticate")
@@ -718,17 +495,12 @@ test("/auth/authenticate (user account is not verified)", async t => {
 });
 
 test("/auth/authenticate (user account is deactivated)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+  const mockUser = db.createMockUserInfo();
 
   await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
@@ -750,14 +522,10 @@ test("/auth/authenticate (user account is deactivated)", async t => {
 });
 
 test("/auth/send/reset-password", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
-    Object.assign(mockUser, { school_id: t.context.school.id, verified: true })
+    Object.assign(mockUser, { verified: true })
   );
 
   const response = await request(app)
@@ -805,14 +573,10 @@ test("/auth/send/reset-password (sending invalid data)", async t => {
 });
 
 test("/auth/send/reset-password (sending reset password request, but one was already sent)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
-    Object.assign(mockUser, { school_id: t.context.school.id, verified: true })
+    Object.assign(mockUser, { verified: true })
   );
 
   const response = await request(app)
@@ -839,14 +603,10 @@ test("/auth/send/reset-password (sending reset password request, but one was alr
 });
 
 test("/auth/send/reset-password (sending reset password request, but account has not been verified)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "admin"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
-    Object.assign(mockUser, { school_id: t.context.school.id, verified: false })
+    Object.assign(mockUser, { verified: false })
   );
 
   const response = await request(app)
@@ -866,11 +626,7 @@ test("/auth/send/reset-password (sending reset password request, but account has
 });
 
 test("/auth/send/reset-password (sending reset password request, but account does not exist)", async t => {
-  const mockeUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockeUser = db.createMockUserInfo();
 
   const response = await request(app)
     .post("/auth/send/reset-password")
@@ -886,24 +642,18 @@ test("/auth/send/reset-password (sending reset password request, but account doe
 });
 
 test("/auth/reactivate", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
   const TEMP_TOKEN = jwt.sign(
     {
-      email: newUser.email,
-      school_id: newUser.school_id
+      email: newUser.email
     },
     TOKEN_SECRET,
     {
@@ -953,17 +703,12 @@ test("/auth/reactivate", async t => {
 });
 
 test("/auth/reactivate (sending a invalid token)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
@@ -980,7 +725,7 @@ test("/auth/reactivate (sending a invalid token)", async t => {
   t.true(account.deactivated, "The account should be deactivated");
 });
 
-test("/auth/reactivate (providing no token)", async t => {
+test("/auth/reactivate (providing no temporary reste password token)", async t => {
   const response = await request(app).get("/auth/reactivate");
 
   t.log(JSON.stringify(response, null, 4));
@@ -989,24 +734,18 @@ test("/auth/reactivate (providing no token)", async t => {
 });
 
 test("/auth/reset-password", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
   const TEMP_TOKEN = jwt.sign(
     {
-      email: newUser.email,
-      school_id: newUser.school_id
+      email: newUser.email
     },
     TOKEN_SECRET,
     {
@@ -1055,25 +794,19 @@ test("/auth/reset-password (sending invalid data)", async t => {
   t.is(response.body.error_code, validationJsonResponse.error_code);
 });
 
-test("/auth/reset-password (the user's account has not been deactivated)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+test("/auth/reset-password (reseting a user account but the user's account has not been deactivated)", async t => {
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: false,
-      school_id: t.context.school.id
+      deactivated: false
     })
   );
 
   const TEMP_TOKEN = jwt.sign(
     {
-      email: newUser.email,
-      school_id: newUser.school_id
+      email: newUser.email
     },
     TOKEN_SECRET,
     {
@@ -1092,7 +825,7 @@ test("/auth/reset-password (the user's account has not been deactivated)", async
 
   t.log(JSON.stringify(response, null, 4));
 
-  t.is(response.status, 400, "This should return a status of 200");
+  t.is(response.status, 400, "This should return a status of 400");
 
   t.is(
     response.body.error_code,
@@ -1116,27 +849,21 @@ test("/auth/reset-password (sending a invalid token)", async t => {
   t.is(response.body.error_code, TokenError.INVALID_TOKEN_EXCEPTION);
 });
 
-test("/auth/reset-password (reset password but sending the old password as the new password)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
+test("/auth/reset-password (reseting user password but, sending the old password as the new password)", async t => {
+  const mockUser = db.createMockUserInfo();
 
   mockUser.password = "@Foobarba3";
 
   await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
   const TEMP_TOKEN = jwt.sign(
     {
-      email: mockUser.email,
-      school_id: t.context.school.id
+      email: mockUser.email
     },
     TOKEN_SECRET,
     {
@@ -1167,24 +894,18 @@ test("/auth/reset-password (reset password but sending the old password as the n
 });
 
 test("/auth/reset-password (updating the password, however not passing the uniqueness checks)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "professor"
-  );
+  const mockUser = db.createMockUserInfo();
 
   await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
   const TEMP_TOKEN = jwt.sign(
     {
-      email: mockUser.email,
-      school_id: t.context.school.id
+      email: mockUser.email
     },
     TOKEN_SECRET,
     {
@@ -1214,8 +935,7 @@ test("/auth/reset-password (updating the password, however not passing the uniqu
 test("/auth/reset-password (reseting password password for a account that does not exist)", async t => {
   const TEMP_TOKEN = jwt.sign(
     {
-      email: "SOME_OTHER_RANDOM_BULLSHIT",
-      school_id: "SOME_RANDOM_BULLSHIT"
+      email: "SOME_OTHER_RANDOM_BULLSHIT"
     },
     TOKEN_SECRET,
     {
@@ -1242,24 +962,18 @@ test("/auth/reset-password (reseting password password for a account that does n
 });
 
 test("/auth/reset-password (reseting password with a expired token)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
   const RANDOM_TOKEN = jwt.sign(
     {
-      email: mockUser.email,
-      school_id: t.context.school.id
+      email: mockUser.email
     },
     TOKEN_SECRET,
     {
@@ -1284,24 +998,18 @@ test("/auth/reset-password (reseting password with a expired token)", async t =>
 });
 
 test("/auth/reset-password (reseting password with a token witha invalid signature)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   await db.createUser(
     Object.assign(mockUser, {
       verified: true,
-      deactivated: true,
-      school_id: t.context.school.id
+      deactivated: true
     })
   );
 
   const RANDOM_TOKEN = jwt.sign(
     {
-      email: mockUser.email,
-      school_id: t.context.school.id
+      email: mockUser.email
     },
     "YUMMY_TOKEN_SECRET",
     {
@@ -1326,17 +1034,11 @@ test("/auth/reset-password (reseting password with a token witha invalid signatu
 });
 
 test("/auth/update-password", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
-      verified: true,
-      deactivated: false,
-      school_id: t.context.school.id
+      verified: true
     })
   );
 
@@ -1358,18 +1060,12 @@ test("/auth/update-password", async t => {
   t.true(bcrypt.compareSync(NEW_PASSWORD, user.hash));
 });
 
-test("/auth/update-password (updatinng password but setting the old password as the new password)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+test("/auth/update-password (updatinng password but, setting the old password as the new password)", async t => {
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
-      verified: true,
-      deactivated: false,
-      school_id: t.context.school.id
+      verified: true
     })
   );
 
@@ -1391,18 +1087,12 @@ test("/auth/update-password (updatinng password but setting the old password as 
   );
 });
 
-test("/auth/update-password (updating password but the old passowrd is incorrect)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+test("/auth/update-password (updating password but, the old passowrd is incorrect)", async t => {
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
-      verified: true,
-      deactivated: false,
-      school_id: t.context.school.id
+      verified: true
     })
   );
 
@@ -1425,17 +1115,11 @@ test("/auth/update-password (updating password but the old passowrd is incorrect
 });
 
 test("/auth/update-password (updating password while authenticated, but the new password does not pass uniqueness check)", async t => {
-  const mockUser = db.createMockUserInfo(
-    t.context.school.name,
-    t.context.school.domain,
-    "student"
-  );
+  const mockUser = db.createMockUserInfo();
 
   const newUser = await db.createUser(
     Object.assign(mockUser, {
-      verified: true,
-      deactivated: false,
-      school_id: t.context.school.id
+      verified: true
     })
   );
 
@@ -1452,4 +1136,32 @@ test("/auth/update-password (updating password while authenticated, but the new 
   t.is(response.status, 400, "Should return status code of 400");
 
   t.is(response.body.error_code, AuthenticationError.UNIQUE_PASSWORD_EXCEPTION);
+});
+
+test("/auth/update-password (updating password while authenticated, but the user accoutnt has been deactivated)", async t => {
+  const mockUser = db.createMockUserInfo();
+
+  const newUser = await db.createUser(
+    Object.assign(mockUser, {
+      verified: true,
+      deactivated: true
+    })
+  );
+
+  const response = await request(app)
+    .put("/auth/update-password")
+    .send({
+      new_password: "NEW_PASSWORD",
+      old_password: mockUser.password
+    })
+    .set("x-token", `Bearer ${newUser.token}`);
+
+  t.log(JSON.stringify(response, null, 4));
+
+  t.is(response.status, 401, "Should return status code of 401");
+
+  t.is(
+    response.body.error_code,
+    AuthenticationError.ACCOUNT_DEACTIVATED_EXCEPTION
+  );
 });

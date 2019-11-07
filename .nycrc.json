@@ -1,12 +1,16 @@
 {
-  "extension": [".ts"],
   "check-coverage": false,
-  "include": ["src/routes/**/*"],
   "extends": "@istanbuljs/nyc-config-typescript",
   "exclude": [
+    "**/tests",
     "**/*.d.ts",
     "**/types.ts",
     "**/model.ts",
-    "**/request-schemas.ts"
+    "src/config.ts",
+    "**/error-codes.ts",
+    "src/common/logger.ts",
+    "**/request-schemas.ts",
+    "src/common/utils/config-validation.ts",
+    "src/routes/authentication/google-oauth"
   ]
 }

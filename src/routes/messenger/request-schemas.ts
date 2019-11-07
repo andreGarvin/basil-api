@@ -1,7 +1,7 @@
 import * as joi from "joi";
 
 // config
-import { CHARACTER_LIMIT } from "../../config";
+import { MIN_CHARACTER_LIMIT } from "../../config";
 
 export const newDirectMessageSchema = joi.object().keys({
   member: joi
@@ -39,12 +39,12 @@ const groupNameSchema = joi
 const groupDescriptionSchema = joi
   .string()
   .optional()
-  .max(CHARACTER_LIMIT)
+  .max(MIN_CHARACTER_LIMIT)
   .error(([err]) => {
     switch (err.type) {
       case "string.max":
         return {
-          message: `the description can not be longer then ${CHARACTER_LIMIT} characters`,
+          message: `the description can not be longer then ${MIN_CHARACTER_LIMIT} characters`,
           type: err.type,
           path: err.path
         };

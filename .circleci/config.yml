@@ -17,11 +17,10 @@ jobs:
 
     environment:
       # This is not sensitive secrets
-      API_KEY: FOOBARBAZ
       HOST: http://localhost:8081
-      JSON_WEB_TOKEN: SPOODER_MAN
-      NO_REPLY: Pivot <no-reply@pivotlms.com>
-      MONGO_URI: mongodb://localhost:27017/pivot
+      JSON_WEB_TOKEN_SECRET: SPOODER_MAN
+      NO_REPLY: Basil <no-reply@basil.com>
+      MONGO_URI: mongodb://localhost:27017/basil-test
 
     steps:
       - checkout
@@ -34,9 +33,9 @@ jobs:
           name: npm run build
           command: npm run build
 
-      # - run:
-      #     name: npm test
-      #     command: npm test
+      - run:
+          name: npm test
+          command: npm test
 
   deploy:
     docker:
@@ -44,7 +43,7 @@ jobs:
       - image: docker:17.05.0-ce-git
 
     environment:
-      APP_NAME: pivotlms-api
+      APP_NAME: basil-api
 
     steps:
       - checkout

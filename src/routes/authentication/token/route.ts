@@ -48,7 +48,9 @@ router.put(
   (req: express.Request, res: express.Response, next: express.NextFunction) => {
     return token
       .refreshToken(req.state.user)
-      .then(resfreshedToken => res.status(200).json(resfreshedToken))
+      .then(refreshedToken =>
+        res.status(200).json({ refreshed_token: refreshedToken })
+      )
       .catch(next);
   }
 );

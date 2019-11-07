@@ -12,6 +12,10 @@ const emailSchema = joi
     };
   });
 
+export const emailObjectSchema = joi.object().keys({
+  email: emailSchema
+});
+
 export const BasicAuthenticationSchema = joi.object().keys({
   email: emailSchema,
   password: joi
@@ -75,18 +79,6 @@ export const resetPasswordSchema = joi.object().keys({
 export const createAccountSchema = joi.object().keys({
   email: emailSchema,
 
-  role: joi
-    .string()
-    .regex(/student|professor|admin/)
-    .optional()
-    .error(([err]) => {
-      return {
-        message: "must select a valid user role",
-        path: err.path,
-        type: err.type
-      };
-    }),
-
   password: joi
     .string()
     .required()
@@ -98,37 +90,91 @@ export const createAccountSchema = joi.object().keys({
       };
     }),
 
-  last_name: joi
+  display_name: joi
     .string()
     .required()
     .error(([err]) => {
       return {
-        message: "must provide last name",
+        message: "must provide display name",
         path: err.path,
         type: err.type
       };
     }),
 
-  school_name: joi.string().error(([err]) => {
+  username: joi.string().error(([err]) => {
     return {
-      message: "must provide valid school name",
+      message: "must provide username",
       path: err.path,
       type: err.type
     };
   }),
 
-  first_name: joi
+  gender: joi
     .string()
+    .regex(/male|female|other/)
     .optional()
     .error(([err]) => {
       return {
-        message: "must provide first name",
+        message: "must provide a gender",
+        path: err.path,
+        type: err.type
+      };
+    }),
+
+  date_of_birth: joi
+    .date()
+    .required()
+    .error(([err]) => {
+      return {
+        message: "must provide a date of birth",
         path: err.path,
         type: err.type
       };
     })
 });
 
-export const emailObjectSchema = joi.object().keys({
-  email: emailSchema
+export const createAccountWithGoogleSchema = joi.object().keys({
+  email: emailSchema,
+
+  display_name: joi
+    .string()
+    .required()
+    .error(([err]) => {
+      return {
+        message: "must provide display name",
+        path: err.path,
+        type: err.type
+      };
+    }),
+
+  username: joi.string().error(([err]) => {
+    return {
+      message: "must provide username",
+      path: err.path,
+      type: err.type
+    };
+  }),
+
+  gender: joi
+    .string()
+    .regex(/male|female|other/)
+    .optional()
+    .error(([err]) => {
+      return {
+        message: "must provide a gender",
+        path: err.path,
+        type: err.type
+      };
+    }),
+
+  date_of_birth: joi
+    .date()
+    .required()
+    .error(([err]) => {
+      return {
+        message: "must provide a date of birth",
+        path: err.path,
+        type: err.type
+      };
+    })
 });

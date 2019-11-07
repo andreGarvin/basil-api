@@ -38,10 +38,10 @@ export interface AggregatedDirectMessageInfo extends DirectMessage {
   member: {
     name: string;
     email: string;
-    status: string;
+    // status: string;
     photo_url: string;
-    is_active: boolean;
-    is_workspace_admin: boolean;
+    // is_active: boolean;
+    // is_workspace_admin: boolean;
   };
 }
 

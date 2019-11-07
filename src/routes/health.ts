@@ -1,11 +1,8 @@
 import * as express from "express";
 
 // models
-import workspaceMemberModel from "./workspace/member/model";
-import invitationModel from "./invitation/model";
-import workspaceModel from "./workspace/model";
+import googleAccessTokenModel from "./authentication/google-oauth/model";
 import userModel from "./authentication/model";
-import registryModel from "./registry/model";
 
 // utils
 import logger from "../common/logger";
@@ -18,10 +15,7 @@ import logger from "../common/logger";
 const heavyCheck = async (): Promise<void> => {
   try {
     await userModel.find({}).limit(1);
-    await registryModel.find({}).limit(1);
-    await workspaceModel.find({}).limit(1);
-    await invitationModel.find({}).limit(1);
-    await workspaceMemberModel.find({}).limit(1);
+    await googleAccessTokenModel.find({}).limit(1);
   } catch (err) {
     logger.child({ error: err }).error("Internal server error, A query failed");
 

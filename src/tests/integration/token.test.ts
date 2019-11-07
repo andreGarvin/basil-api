@@ -6,8 +6,11 @@ import * as request from "supertest";
 import * as jwt from "jsonwebtoken";
 
 const test = ava as TestInterface<{
-  school: { id: string };
-  user: { id: string; token: string };
+  user: {
+    id: string;
+    email: string;
+    token: string;
+  };
 }>;
 
 // database helper functions
@@ -18,28 +21,21 @@ import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
 
 import app from "../../index";
-import { InvitationRoles } from "../../routes/invitation";
+import { USER_TOKEN_EXPIRATION } from "../../config";
 
 test.beforeEach(async t => {
-  const generatedSchool = await db.createSchool();
-  t.context.school = {
-    id: generatedSchool.id
-  };
-
   const user = await db.createUser({
-    role: InvitationRoles.STUDENT,
-    school_id: generatedSchool.id
+    verified: true
   });
 
   t.context.user = {
     id: user.id,
+    email: user.email,
     token: user.token
   };
 });
 
 test.afterEach.always(async t => {
-  await db.clearRegistry();
-
   await db.clearUsers();
 });
 
@@ -53,8 +49,10 @@ test("/auth/token/authenicate", async t => {
   t.is(response.status, 200, "Should be status code of 200");
 
   t.deepEqual(response.body, {
+    is_admin: false,
     user_id: t.context.user.id,
-    school_id: t.context.school.id
+    email: t.context.user.email,
+    should_refresh_token: false
   });
 });
 
@@ -67,16 +65,15 @@ test("/auth/token/authenicate (providing a invalid token)", async t => {
 
   t.is(response.status, 400, "Should be status code of 400");
 
-  t.deepEqual(response.body, {
-    context: {},
-    error_code: TokenError.INVALID_TOKEN_EXCEPTION,
-    message: "The token that was provided is invalid"
-  });
+  t.deepEqual(response.body.error_code, TokenError.INVALID_TOKEN_EXCEPTION);
 });
 
 test("/auth/token/authenicate (providing a expired token)", async t => {
   const exipredToken = jwt.sign(
-    { user_id: t.context.user.id, school_code: t.context.school.id },
+    {
+      is_admin: false,
+      email: t.context.user.id
+    },
     process.env.JSON_WEB_TOKEN_SECERT,
     {
       algorithm: "HS256",
@@ -94,20 +91,20 @@ test("/auth/token/authenicate (providing a expired token)", async t => {
 
   t.is(response.status, 400, "Should be status code of 200");
 
-  t.deepEqual(response.body, {
-    context: {},
-    message: "Token has exipred",
-    error_code: TokenError.EXPIRED_TOKEN_EXCEPTION
-  });
+  t.deepEqual(response.body.error_code, TokenError.EXPIRED_TOKEN_EXCEPTION);
 });
 
 test("/auth/token/authenicate (providing a token with no existing account)", async t => {
+  const [randomUserEmil] = db.generateRandomUserEmails(1);
   const token = jwt.sign(
-    { user_id: "some-user-id", school_code: "some-school-code" },
+    {
+      is_admin: true,
+      email: randomUserEmil
+    },
     process.env.JSON_WEB_TOKEN_SECERT,
     {
       algorithm: "HS256",
-      expiresIn: "30d"
+      expiresIn: USER_TOKEN_EXPIRATION
     }
   );
 
@@ -119,11 +116,10 @@ test("/auth/token/authenicate (providing a token with no existing account)", asy
 
   t.is(response.status, 404, "Should be status code of 404");
 
-  t.deepEqual(response.body, {
-    context: {},
-    message: "account does not exist",
-    error_code: AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION
-  });
+  t.deepEqual(
+    response.body.error_code,
+    AuthenticationError.ACCOUNT_NOT_FOUND_EXCEPTION
+  );
 });
 
 test("/auth/token/refresh", async t => {
@@ -135,15 +131,13 @@ test("/auth/token/refresh", async t => {
 
   t.is(response.status, 200, "should return a status of 200");
 
-  t.not(response.body.refreshed_token, t.context.user.token);
+  const responseTwo = await request(app)
+    .post("/auth/token/authenticate")
+    .set("x-token", `Bearer ${response.body.refreshed_token}`);
 
-  t.deepEqual(
-    { user_id: response.body.user_id, school_id: response.body.school_id },
-    {
-      user_id: t.context.user.id,
-      school_id: t.context.school.id
-    }
-  );
+  t.log(JSON.stringify(responseTwo, null, 4));
+
+  t.is(responseTwo.status, 200, "should return a status of 200");
 });
 
 test("/auth/token/refresh (refresh a token for a account that is deactivated)", async t => {

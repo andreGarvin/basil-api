@@ -2,6 +2,8 @@ import * as express from "express";
 
 import * as joi from "joi";
 
+// import * as dateFn from "date-fns";
+
 // modules
 import * as token from "../index";
 
@@ -47,11 +49,6 @@ const tokenAuthenticationMiddlewre = (
     return res.status(400).json(ValidationJsonResponse());
   }
 
-  // if the request is authenticate a token, forward on the request
-  if (req.path === "/auth/token/authenticate") {
-    return next();
-  }
-
   // authenticating token
   return token
     .authenticate(TOKEN)
@@ -60,15 +57,7 @@ const tokenAuthenticationMiddlewre = (
       req.state.user = tokenInfo.user_id;
       return next();
     })
-    .catch(err => {
-      if (err instanceof Error) {
-        logger
-          .child({ error: err })
-          .error("Error on token authentication middleware");
-      }
-
-      return next(err);
-    });
+    .catch(next);
 };
 
 export default tokenAuthenticationMiddlewre;

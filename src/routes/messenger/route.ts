@@ -13,10 +13,9 @@ import { ValidationJsonResponse } from "../../config";
 import joiValidateResponse from "../../common/utils/joi-validate-response";
 
 // middleware
-import isWorkspaceMemberMiddleware from "../workspace/member/middleware/is-workspace-member";
-import isWorkspaceArchivedMiddleware from "../workspace/middleware/is-workspace-archived";
-import authenticationMiddleware from "../authentication/middleware/authentication";
-import isGroupMember from "./member/middlewre/is-group-member";
+// import isWorkspaceMemberMiddleware from "../workspace/member/middleware/is-workspace-member";
+// import isWorkspaceArchivedMiddleware from "../workspace/middleware/is-workspace-archived";
+// import isGroupMember from "./member/middlewre/is-group-member";
 
 // reqyest schemas
 import {
@@ -27,13 +26,11 @@ import {
 } from "./request-schemas";
 import returnInt from "../../common/utils/return-int";
 
-router.use(authenticationMiddleware);
-
 // direct message
 router.post(
   "/direct-message/create/:workspace_id",
-  isWorkspaceMemberMiddleware(),
-  isWorkspaceArchivedMiddleware(),
+  // isWorkspaceMemberMiddleware(),
+  // isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, newDirectMessageSchema, {
       abortEarly: false
@@ -60,8 +57,8 @@ router.post(
 // channel
 router.post(
   "/channel/create/:workspace_id",
-  isWorkspaceMemberMiddleware(true),
-  isWorkspaceArchivedMiddleware(),
+  // isWorkspaceMemberMiddleware(true),
+  // isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, newChannelSchema, {
       abortEarly: false
@@ -89,8 +86,8 @@ router.post(
 // group
 router.post(
   "/group/create/:workspace_id",
-  isWorkspaceMemberMiddleware(),
-  isWorkspaceArchivedMiddleware(),
+  // isWorkspaceMemberMiddleware(),
+  // isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const { error } = joi.validate(req.body, newGroupSchema, {
       abortEarly: false
@@ -118,7 +115,7 @@ router.post(
 
 router.get(
   "/search/:workspace_id",
-  isWorkspaceMemberMiddleware(),
+  // isWorkspaceMemberMiddleware(),
   (req, res, next) => {
     const body = {
       page: req.query.page,
@@ -155,8 +152,8 @@ router.get(
 
 router.get(
   "/feeling-lucky/:workspace_id",
-  isWorkspaceMemberMiddleware(),
-  isWorkspaceArchivedMiddleware(),
+  // isWorkspaceMemberMiddleware(),
+  // isWorkspaceArchivedMiddleware(),
   (req, res, next) => {
     const isChannel = req.query.is_channel === "true";
 
