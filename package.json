@@ -9,10 +9,10 @@
     "start:dev": "NODE_ENV=dev nodemon .",
     "build": "tsc --project tsconfig.json",
     "restart:db": "docker restart mongodb-dev",
-    "test:integration": "NODE_ENV=test nyc ava",
     "test": "NODE_DEBUG=true NODE_ENV=test nyc ava",
     "build:watch": "tsc -w --project tsconfig.json",
-    "launch:db": "docker run -d --name mongodb-dev -p 27017:27017 mongo:latest"
+    "launch:db": "docker run -d --name mongodb-dev -p 27017:27017 mongo:latest",
+    "test:integration": "NODE_ENV=test nyc ava ./build/tests/integration"
   },
   "ava": {
     "failFast": true,

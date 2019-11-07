@@ -13,7 +13,9 @@ This readme encapsulates how to setup and start the backend api for local develo
 - `npm run build`: trans-compile the typescript project
 - `npm start`: starts the service in a production setting
 - `npm run start:dev`: starts the service in development mode
-- `npm run build:watch`: trans-compile the typescript project on every save made in the `.src` folder
+- `npm run stop:db`: stops the docker container running mongodb
+- `npm run launch:db`: creates/launches a docker container running mongodb
+- `npm run restart:db`: This restarts the docker container running mongodb
 
 ## Getting started
 
