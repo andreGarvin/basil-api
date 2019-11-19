@@ -263,14 +263,13 @@ export async function createAccountFromGoogleInfo(
       picture: string;
     };
 
-    const isAdmin = userAccessTokens.email.endsWith(
-      `@${config.BASIL_EMAIL_DOMAIN}`
-    );
+    const isAdmin = userAccessTokens.email.endsWith(`@${config.ORG_DOMAIN}`);
 
     // creating the user token
     const userToken = createUserToken(userAccessTokens.email, isAdmin);
 
     const newAccount = new userModel({
+      suspended: false,
       token: userToken,
       is_admin: isAdmin,
       gender: userInfo.gender,

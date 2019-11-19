@@ -9,6 +9,7 @@ export interface UserAccount {
   verified: boolean;
   photo_url: string;
   created_at: string;
+  suspended: boolean;
   deactivated: boolean;
   display_name: string;
   description?: string;

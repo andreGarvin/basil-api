@@ -7,11 +7,11 @@ import * as joi from "joi";
 // module
 import * as googleOauth from "./index";
 
-// config
-import { ValidationJsonResponse } from "../../../config";
-
 // utils
-import joiValidateResponse from "../../../common/utils/joi-validate-response";
+import {
+  joiValidateResponse,
+  ValidationJsonResponse
+} from "../../../common/utils/validation-response";
 
 // request schemas
 import { createAccountWithGoogleSchema } from "../request-schemas";

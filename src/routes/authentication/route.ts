@@ -4,7 +4,7 @@ import * as express from "express";
 const router = express.Router();
 
 // config
-import { ValidationJsonResponse, APPLICATION_URL } from "../../config";
+import { APPLICATION_URL } from "../../config";
 
 // module
 import * as authentication from "./index";
@@ -14,7 +14,10 @@ import googleOauthRoute from "./google-oauth/route";
 import tokenRoute from "./token/route";
 
 // utils
-import joiValidateResponse from "../../common/utils/joi-validate-response";
+import {
+  joiValidateResponse,
+  ValidationJsonResponse
+} from "../../common/utils/validation-response";
 
 // middleware
 import authenticationMiddleware from "./middleware/authentication";

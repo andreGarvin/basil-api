@@ -99,6 +99,7 @@ export const authenticate = async (
         token: 1,
         is_admin: 1,
         verified: 1,
+        suspended: 1,
         deactivated: 1
       }
     );
@@ -122,6 +123,14 @@ export const authenticate = async (
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_DEACTIVATED_EXCEPTION,
         "Your account has been deactivated",
+        { http_code: 401 }
+      );
+    }
+
+    if (user.suspended) {
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_SUSPENDED_EXCEPTION,
+        "Your account has been suspended",
         { http_code: 401 }
       );
     }

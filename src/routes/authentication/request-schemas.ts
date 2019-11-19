@@ -1,5 +1,7 @@
 import * as joi from "joi";
 
+import { MAX_USERNAME_LENGTH } from "../../config";
+
 const emailSchema = joi
   .string()
   .email()
@@ -12,12 +14,96 @@ const emailSchema = joi
     };
   });
 
+export const genderSchema = joi
+  .string()
+  .regex(/male|female|other/)
+  .error(([err]) => {
+    switch (err.type) {
+      case "string.base":
+        return {
+          message: "must provide a gender",
+          path: err.path,
+          type: err.type
+        };
+      default:
+        return {
+          message: err.message,
+          path: err.path,
+          type: err.type
+        };
+    }
+  });
+
+export const dispalyNameSchema = joi
+  .string()
+  .optional()
+  .allow("")
+  .max(MAX_USERNAME_LENGTH)
+  .error(([err]) => {
+    switch (err.type) {
+      case "string.base":
+        return {
+          message: "must provide a valid display name",
+          path: err.path,
+          type: err.type
+        };
+      case "string.max":
+        return {
+          message: `display name can not be more then ${MAX_USERNAME_LENGTH} characters`,
+          path: err.path,
+          type: err.type
+        };
+      default:
+        return {
+          message: err.message,
+          path: err.path,
+          type: err.type
+        };
+    }
+  });
+
+export const usernameSchema = joi
+  .string()
+  .min(0)
+  // matching usernames that have a @ symbol or whitespaces
+  .regex(/^((?!@|\s).)*$/)
+  .max(MAX_USERNAME_LENGTH)
+  .error(([err]) => {
+    switch (err.type) {
+      case "string.base":
+        return {
+          message: "username name is not valid",
+          path: err.path,
+          type: err.type
+        };
+      case "string.regex.base":
+        return {
+          message: "username cannot contain a @ symbol or whitespaces",
+          path: err.path,
+          type: err.type
+        };
+      case "string.max":
+        return {
+          message: `username can not be more then ${MAX_USERNAME_LENGTH} characters`,
+          path: err.path,
+          type: err.type
+        };
+      default:
+        return {
+          message: "username name is not valid",
+          path: err.path,
+          type: err.type
+        };
+    }
+  });
+
 export const emailObjectSchema = joi.object().keys({
   email: emailSchema
 });
 
 export const BasicAuthenticationSchema = joi.object().keys({
   email: emailSchema,
+
   password: joi
     .string()
     .required()
@@ -41,6 +127,7 @@ export const updatePasswordSchema = joi.object().keys({
         type: err.type
       };
     }),
+
   old_password: joi
     .string()
     .required()
@@ -64,6 +151,7 @@ export const resetPasswordSchema = joi.object().keys({
         type: err.type
       };
     }),
+
   tmp_token: joi
     .string()
     .required()
@@ -79,43 +167,18 @@ export const resetPasswordSchema = joi.object().keys({
 export const createAccountSchema = joi.object().keys({
   email: emailSchema,
 
+  gender: genderSchema,
+
+  username: usernameSchema.required(),
+
+  display_name: dispalyNameSchema,
+
   password: joi
     .string()
     .required()
     .error(([err]) => {
       return {
         message: "must provide a password",
-        path: err.path,
-        type: err.type
-      };
-    }),
-
-  display_name: joi
-    .string()
-    .required()
-    .error(([err]) => {
-      return {
-        message: "must provide display name",
-        path: err.path,
-        type: err.type
-      };
-    }),
-
-  username: joi.string().error(([err]) => {
-    return {
-      message: "must provide username",
-      path: err.path,
-      type: err.type
-    };
-  }),
-
-  gender: joi
-    .string()
-    .regex(/male|female|other/)
-    .optional()
-    .error(([err]) => {
-      return {
-        message: "must provide a gender",
         path: err.path,
         type: err.type
       };
@@ -136,36 +199,11 @@ export const createAccountSchema = joi.object().keys({
 export const createAccountWithGoogleSchema = joi.object().keys({
   email: emailSchema,
 
-  display_name: joi
-    .string()
-    .required()
-    .error(([err]) => {
-      return {
-        message: "must provide display name",
-        path: err.path,
-        type: err.type
-      };
-    }),
+  gender: genderSchema,
 
-  username: joi.string().error(([err]) => {
-    return {
-      message: "must provide username",
-      path: err.path,
-      type: err.type
-    };
-  }),
+  username: usernameSchema.required(),
 
-  gender: joi
-    .string()
-    .regex(/male|female|other/)
-    .optional()
-    .error(([err]) => {
-      return {
-        message: "must provide a gender",
-        path: err.path,
-        type: err.type
-      };
-    }),
+  display_name: dispalyNameSchema,
 
   date_of_birth: joi
     .date()

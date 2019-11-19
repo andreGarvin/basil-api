@@ -7,10 +7,11 @@ import { APP_NAME } from "../config";
 // routes
 import authentication from "./authentication/route";
 // import messenger from "./messenger/route";
+import user from "./user/route";
 import health from "./health";
 
-// middlware
-// import authenticationMiddleware from "../authentication/middleware/authentication";
+// middlwares
+import authenticationMiddleware from "./authentication/middleware/authentication";
 import errorHandler from "./middleware/error-handler";
 import httpLogger from "./middleware/http-logger";
 import stateMiddlware from "./middleware/state";
@@ -31,6 +32,7 @@ router.use(stateMiddlware());
 
 // routes
 router.use("/auth", authentication);
+router.use("/api/user", authenticationMiddleware, user);
 // router.use("/api/messenger", authenticationMiddleware, messenger);
 
 // middlware for handling errors and return error responses
@@ -38,9 +40,9 @@ router.use(errorHandler());
 
 router.use((req, res, next) => {
   res.status(404).json({
-    message: 'This route does not exist',
-    code: 'NOT_FOUND'
-  })
+    message: "This route does not exist",
+    code: "NOT_FOUND"
+  });
 });
 
 export default router;

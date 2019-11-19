@@ -6,8 +6,8 @@ import * as joi from "joi";
 // modules
 import * as token from "./index";
 
-// config
-import { ValidationJsonResponse } from "../../../config";
+// common json validation response
+import { ValidationJsonResponse } from "../../../common/utils/validation-response";
 
 // middleware
 import authenticationMilddlewarePipeline from "../middleware/authentication";

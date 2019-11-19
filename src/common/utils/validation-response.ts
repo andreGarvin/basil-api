@@ -1,12 +1,18 @@
 import * as joi from "joi";
 
+// error response wrapper
+import ErrorResponse from "./error";
+
+// error codes
+import { VALIDATION_EXCEPTION } from "../error-codes";
+
 interface ValidationErrorResponse {
   message: string;
   field: string;
   pos?: number;
 }
 
-export default (
+export const joiValidateResponse = (
   errors: joi.ValidationErrorItem[]
 ): ValidationErrorResponse[] => {
   return errors.map(error => {
@@ -22,4 +28,13 @@ export default (
 
     return newError;
   });
+};
+
+// a common validation error response
+export const ValidationJsonResponse = (context?: { [key: string]: any }) => {
+  return ErrorResponse(
+    VALIDATION_EXCEPTION,
+    "There seems to be issue with the information provided",
+    context
+  );
 };

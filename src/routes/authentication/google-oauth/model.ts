@@ -8,7 +8,7 @@ export interface GoogleAccessTokensModel extends GoogleAccessTokens, Document {
 }
 
 // This modal invites collection
-const userSchema = new Schema({
+const googleAccessTokenSchema = new Schema({
   // the user id
   email: {
     required: true,
@@ -40,7 +40,9 @@ const userSchema = new Schema({
   }
 });
 
+googleAccessTokenSchema.index({ email: 1 }, { unique: true });
+
 export default model<GoogleAccessTokensModel>(
   "google_access_tokens",
-  userSchema
+  googleAccessTokenSchema
 );

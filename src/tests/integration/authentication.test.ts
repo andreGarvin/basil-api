@@ -6,11 +6,11 @@ import test from "ava";
 import * as request from "supertest";
 import * as jwt from "jsonwebtoken";
 import * as bcrypt from "bcryptjs";
-import * as dateFn from "date-fns";
 
 // error codes
 import AuthenticationError from "../../routes/authentication/error-codes";
 import TokenError from "../../routes/authentication/token/error-codes";
+import UserError from "../../routes/user/error-codes";
 
 // types
 import { DecodedToken } from "../../routes/authentication/token/types";
@@ -19,19 +19,10 @@ import { DecodedToken } from "../../routes/authentication/token/types";
 import * as db from "../helper";
 
 // config
-import {
-  ValidationJsonResponse,
-  TEMP_TOKEN_EXPIRATION,
-  USER_TOKEN_EXPIRATION,
-  TOKEN_SECRET,
-  MAX_FILE_SIZE,
-  MAX_USERNAME_LENGTH,
-  BASIL_EMAIL_DOMAIN
-} from "../../config";
-const validationJsonResponse = ValidationJsonResponse();
+import { TEMP_TOKEN_EXPIRATION, TOKEN_SECRET, ORG_DOMAIN } from "../../config";
 
 import app from "../../index";
-import UserError from "../../routes/user/error-codes";
+import { VALIDATION_EXCEPTION } from "../../common/error-codes";
 
 test.before(async t => {
   await db.clearUsers();
@@ -102,14 +93,14 @@ test("/auth/create (sending invalid data)", async t => {
 
   t.is(response.status, 400, "should return status code of 400");
 
-  t.is(response.body.error_code, validationJsonResponse.error_code);
+  t.is(response.body.error_code, VALIDATION_EXCEPTION);
 });
 
 test("/auth/create (a email with the basil domain)", async t => {
   const mockUser = db.createMockUserInfo();
 
   mockUser.password = "@Foobarb3z1";
-  mockUser.email = `jondoe@${BASIL_EMAIL_DOMAIN}`;
+  mockUser.email = `jondoe@${ORG_DOMAIN}`;
 
   const response = await request(app)
     .post("/auth/create")
@@ -147,29 +138,6 @@ test("/auth/create (creating another account, but a google account exist)", asyn
   t.is(response.status, 400, "should return status code of 400");
 
   t.is(response.body.error_code, AuthenticationError.ACCOUNT_EXIST_EXCEPTION);
-});
-
-test("/auth/create (creating a user account, but the username is longer then 30 characters)", async t => {
-  const mockUser = db.createMockUserInfo();
-
-  mockUser.password = "@Foobarb3z1";
-  mockUser.username = "a".repeat(MAX_USERNAME_LENGTH + 1);
-
-  const response = await request(app)
-    .post("/auth/create")
-    .send({
-      email: mockUser.email,
-      password: mockUser.password,
-      username: mockUser.username,
-      display_name: mockUser.display_name,
-      date_of_birth: mockUser.date_of_birth
-    });
-
-  t.log(JSON.stringify(response, null, 4));
-
-  t.is(response.status, 400, "should return status code of 400");
-
-  t.is(response.body.error_code, UserError.MAX_USERNAME_LENGTH_EXCEPTION);
 });
 
 test("/auth/create (creating a account, but the username is taken)", async t => {
@@ -337,7 +305,7 @@ test("/auth/send/verification (sending invalid data)", async t => {
 
   t.is(response.status, 400, "This should return a status code of 400");
 
-  t.is(response.body.error_code, validationJsonResponse.error_code);
+  t.is(response.body.error_code, VALIDATION_EXCEPTION);
 });
 
 test("/auth/send/verification (sending a email verification, but the user does not exist account)", async t => {
@@ -418,6 +386,30 @@ test("/auth/authenticate", async t => {
   );
 });
 
+test("/auth/authenticate (attempting to login but the user account has been suspended)", async t => {
+  const mockUser = db.createMockUserInfo();
+
+  const newUser = await db.createUser(
+    Object.assign(mockUser, { verified: true, suspended: true })
+  );
+
+  const response = await request(app)
+    .post("/auth/authenticate")
+    .send({
+      email: newUser.email,
+      password: mockUser.password
+    });
+
+  t.log(JSON.stringify(response, null, 4));
+
+  t.is(response.status, 401, "should return status code of 401");
+
+  t.is(
+    response.body.error_code,
+    AuthenticationError.ACCOUNT_SUSPENDED_EXCEPTION
+  );
+});
+
 test("/auth/authenticate (sending invalid data)", async t => {
   const response = await request(app)
     .post("/auth/authenticate")
@@ -430,7 +422,7 @@ test("/auth/authenticate (sending invalid data)", async t => {
 
   t.is(response.status, 400, "should return status code of 400");
 
-  t.deepEqual(response.body.error_code, validationJsonResponse.error_code);
+  t.deepEqual(response.body.error_code, VALIDATION_EXCEPTION);
 });
 
 test("/auth/authenticate (user account does not exist)", async t => {
@@ -570,7 +562,7 @@ test("/auth/send/reset-password (sending invalid data)", async t => {
 
   t.is(response.status, 400, "should return status code of 400");
 
-  t.is(response.body.error_code, validationJsonResponse.error_code);
+  t.is(response.body.error_code, VALIDATION_EXCEPTION);
 });
 
 test("/auth/send/reset-password (sending reset password request, but one was already sent)", async t => {
@@ -792,7 +784,7 @@ test("/auth/reset-password (sending invalid data)", async t => {
 
   t.is(response.status, 400, "This should return a status of 400");
 
-  t.is(response.body.error_code, validationJsonResponse.error_code);
+  t.is(response.body.error_code, VALIDATION_EXCEPTION);
 });
 
 test("/auth/reset-password (reseting a user account but the user's account has not been deactivated)", async t => {

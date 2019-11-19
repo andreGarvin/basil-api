@@ -8,7 +8,7 @@ import * as joi from "joi";
 import * as token from "../index";
 
 // config
-import { ValidationJsonResponse } from "../../../../config";
+import { ValidationJsonResponse } from "../../../../common/utils/validation-response";
 
 // utils
 import logger from "../../../../common/logger";

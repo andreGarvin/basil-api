@@ -90,6 +90,12 @@ const userSchema = new Schema({
     type: Boolean
   },
 
+  // weather or not the user account has been suspend by a admin
+  suspended: {
+    default: false,
+    type: Boolean
+  },
+
   // a time stamp the last time the user logged into their account
   last_login_at: {
     default: "",
@@ -114,5 +120,7 @@ const userSchema = new Schema({
     type: Date
   }
 });
+
+userSchema.index({ email: 1 }, { unique: true });
 
 export default model<UserModel>("users", userSchema);

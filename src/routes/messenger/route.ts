@@ -6,11 +6,11 @@ import * as joi from "joi";
 // module
 import * as messenger from "./index";
 
-// config
-import { ValidationJsonResponse } from "../../config";
-
 // utils
-import joiValidateResponse from "../../common/utils/joi-validate-response";
+import {
+  joiValidateResponse,
+  ValidationJsonResponse
+} from "../../common/utils/validation-response";
 
 // middleware
 // import isWorkspaceMemberMiddleware from "../workspace/member/middleware/is-workspace-member";

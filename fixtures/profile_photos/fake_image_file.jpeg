@@ -1,0 +1,46 @@
+{
+      clientID: process.env.OAUTH_CLIENT_ID,
+      callbackURL: process.env.OAUTH_CALLBACK_URL,
+      COGNITO_URL
+      clientSecret: process.env.OAUTH_CLIENT_SECRET
+    }
+
+      // return async (accessToken, refreshToken, profile, cb) => {
+  //   const userEmail = profile.emails[0].value as string;
+  //   if (!WHITE_LIST.includes(userEmail)) {
+  //     return cb(new Error("Internal Server Error"));
+  //   }
+  //   const user = await createUserIfNotExists(userEmail);
+  //   await updateAccessToken(
+  //     userEmail,
+  //     accessToken,
+  //     moment()
+  //       .add(30, "days")
+  //       .toDate()
+  //   );
+  //   logger
+  //     .addFields({ accessToken, refreshToken, profile })
+  //     .trace("User Token");
+  //   logger.addFields({ user }).info("user oauth info");
+  //   cb(null, { userId: user.id });
+  // }
+
+     // (req, res, next) => {
+    //   passport.authenticate("google", (err, user, info) => {
+    //     if (err) {
+    //       logger.addError(err).error("authenication error");
+    //       return res.redirect("/google/oauth");
+    //     }
+    //     req.logIn(user, err => {
+    //       if (err) {
+    //         logger.addError(err).error("google oauth login error");
+    //         return res.redirect("/google/oauth");
+    //       }
+    //       logger.info("Login succesfull");
+    //       res.redirect("/");
+    //     });
+    //   })(req, res, next);
+    // },
+    // function (req, res) {
+    //   res.redirect("/");
+    // }

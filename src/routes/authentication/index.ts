@@ -8,7 +8,7 @@ import * as bcrypt from "bcryptjs";
 import {
   // APPLICATION_URL,
   MAX_USERNAME_LENGTH,
-  BASIL_EMAIL_DOMAIN,
+  ORG_DOMAIN,
   TOKEN_SECRET,
   SALT_LENGTH,
   NO_REPLY,
@@ -91,6 +91,7 @@ export const authenticate = async (
         email: 1,
         is_admin: 1,
         verified: 1,
+        suspended: 1,
         deactivated: 1
       }
     );
@@ -124,6 +125,14 @@ export const authenticate = async (
       throw ErrorResponse(
         AuthenticationError.ACCOUNT_VERIFICATION_EXCEPTION,
         "This account has not been verified",
+        { http_code: 401 }
+      );
+    }
+
+    if (account.suspended) {
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_SUSPENDED_EXCEPTION,
+        "Your account has been suspended",
         { http_code: 401 }
       );
     }
@@ -178,14 +187,6 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
       );
     }
 
-    if (userInfo.username.length > MAX_USERNAME_LENGTH) {
-      throw ErrorResponse(
-        UserError.MAX_USERNAME_LENGTH_EXCEPTION,
-        "This user is more then 30 characters",
-        { http_code: 400 }
-      );
-    }
-
     // checking if the user account exist
     const account = await userModel.findOne({
       username: {
@@ -211,32 +212,30 @@ export const createAccount = async (userInfo: NewUserInfo): Promise<void> => {
       );
     }
 
-    // checking a default profile photo for the user account
-    const md5Hash = crypto
+    // the user profile photo url
+    const avatarPhotoUrl = new URL(AVATAR_PHOTO_URL);
+    avatarPhotoUrl.pathname = crypto
       .createHash("md5")
       .update(userInfo.email)
       .digest("hex");
-
-    // the user profile photo url
-    const avatarPhotoUrl = new URL(AVATAR_PHOTO_URL);
-    avatarPhotoUrl.pathname = md5Hash;
     avatarPhotoUrl.searchParams.append("d", "identicon");
 
-    const isAdmin = userInfo.email.endsWith(BASIL_EMAIL_DOMAIN);
+    const isAdmin = userInfo.email.endsWith(ORG_DOMAIN);
 
     // creating a new jwt for the user account
     const newUserToken = token.createUserToken(userInfo.email, isAdmin);
 
     const newUser: any = new userModel({
+      suspended: false,
       is_admin: isAdmin,
       token: newUserToken,
       email: userInfo.email,
       gender: userInfo.gender,
       is_google_account: false,
       photo_url: avatarPhotoUrl.href,
-      display_name: userInfo.display_name,
       date_of_birth: userInfo.date_of_birth,
-      username: userInfo.username.toLowerCase(),
+      display_name: userInfo.display_name.trim(),
+      username: userInfo.username.toLowerCase().trim(),
       // generating a hashed password
       hash: bcrypt.hashSync(userInfo.password, SALT_LENGTH)
     });
@@ -357,6 +356,14 @@ export const sendVerificationEmail = async (email: string): Promise<void> => {
       return;
     }
 
+    if (account.suspended) {
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_SUSPENDED_EXCEPTION,
+        "Your account has been suspended",
+        { http_code: 401 }
+      );
+    }
+
     // creating a temporary account verification token
     const verificationTempToken = token.createTempToken({
       email: account.email
@@ -420,6 +427,14 @@ export const sendResetPasswordEmail = async (email: string): Promise<void> => {
         .child({ email })
         .warn("Attempting to verify a deactivated account");
       return;
+    }
+
+    if (account.suspended) {
+      throw ErrorResponse(
+        AuthenticationError.ACCOUNT_SUSPENDED_EXCEPTION,
+        "Your account has been suspended",
+        { http_code: 401 }
+      );
     }
 
     const status = await userModel.updateOne(

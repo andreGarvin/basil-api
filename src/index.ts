@@ -68,6 +68,7 @@ app.use(routes);
 
 // MONGODB connection
 mongoose.connect(MONGO_URI, {
+  useCreateIndex: true,
   useNewUrlParser: true,
   useUnifiedTopology: true
 });

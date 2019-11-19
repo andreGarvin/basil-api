@@ -6,11 +6,19 @@ import * as uuid from "uuid/v4";
 import * as faker from "faker";
 
 // config
-import { HOST } from "../config";
+import {
+  // USER_TOKEN_EXPIRATION,
+  // MIN_CHARACTER_LIMIT,
+  // TOKEN_SECRET,
+  // APP_NAME
+  HOST
+} from "../config";
 
 // models
 // import groupMemberModel from "../routes/messenger/member/models/group-member";
 // import directMessageModel from "../routes/messenger/models/direct-message";
+import blockedUserModel from "../routes/user/models/block-user.model";
+import followerModel from "../routes/user/models/followers.model";
 // import groupModel from "../routes/messenger/models/group";
 import userModel from "../routes/authentication/model";
 
@@ -23,17 +31,10 @@ import logger from "../common/logger";
 // module enums
 // import { DEFAULT_MAIN_CHANNEL_NAME } from "../routes/messenger";
 
-// config
-// import {
-//   USER_TOKEN_EXPIRATION,
-//   MIN_CHARACTER_LIMIT,
-//   TOKEN_SECRET,
-//   APP_NAME
-// } from "../config";
-
 // types
 // import { Group, DirectMessage } from "../routes/messenger/types";
 import { UserAccount } from "../routes/authentication/types";
+import { BlockedUser, Follower } from "../routes/user/types";
 
 export interface MockUserInfo {
   email: string;
@@ -150,10 +151,11 @@ interface UserAccountInfo {
   username?: string;
   password?: string;
   is_admin?: boolean;
+  suspended?: boolean;
   verified?: boolean;
+  deactivated?: boolean;
   display_name?: string;
   date_of_birth?: string;
-  deactivated?: boolean;
   is_google_account?: boolean;
 }
 export const createUser = async (
@@ -196,6 +198,7 @@ export const createUser = async (
       verified: userInfo.verified,
       username: newMockUser.username,
       deactivated: userInfo.deactivated,
+      suspended: userInfo.suspended || false,
       display_name: newMockUser.display_name,
       date_of_birth: newMockUser.date_of_birth,
       is_google_account: userInfo.is_google_account,
@@ -212,6 +215,75 @@ export const createUser = async (
       .child({ error: err })
       .error(
         "Test helper function failed insert mock data for into users collection"
+      );
+
+    throw err;
+  }
+};
+
+export const createUsers = async (
+  numberOfUsers: number
+): Promise<UserAccount[]> => {
+  try {
+    const newUsers = [];
+    for (let i = 0; i < numberOfUsers; i++) {
+      newUsers.push(
+        await createUser({
+          verified: true
+        })
+      );
+    }
+
+    return newUsers;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed one or more insert mock data for into users collection"
+      );
+
+    throw err;
+  }
+};
+
+export const createFollower = async (
+  userId: string,
+  profileUserId: string
+): Promise<void> => {
+  try {
+    const newFollower = new followerModel({
+      user_id: userId,
+      following_user_id: profileUserId
+    });
+
+    await newFollower.save();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into followers collection"
+      );
+
+    throw err;
+  }
+};
+
+export const createBlockedUser = async (
+  userId: string,
+  profileUserId: string
+): Promise<void> => {
+  try {
+    const newBlockedUser = new blockedUserModel({
+      user_id: userId,
+      blocked_user_id: profileUserId
+    });
+
+    await newBlockedUser.save();
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed insert mock data for into blocked_users collection"
       );
 
     throw err;
@@ -303,6 +375,62 @@ export const findUserByEmail = async (email: string): Promise<UserAccount> => {
       .child({ error: err })
       .error(
         "Test helper function failed to return document from users collection"
+      );
+  }
+};
+
+export const findUserById = async (userId: string): Promise<UserAccount> => {
+  try {
+    const user = await userModel.findOne({
+      id: userId
+    });
+
+    return user ? user.toJSON() : user;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from users collection"
+      );
+  }
+};
+
+export const findBlockedUser = async (
+  userId: string,
+  profileUserId: string
+): Promise<BlockedUser> => {
+  try {
+    const blockedUser = await blockedUserModel.findOne({
+      user_id: userId,
+      blocked_user_id: profileUserId
+    });
+
+    return blockedUser ? blockedUser.toJSON() : blockedUser;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from blocked_users collection"
+      );
+  }
+};
+
+export const findFollower = async (
+  userId: string,
+  profileUserId: string
+): Promise<Follower> => {
+  try {
+    const follower = await followerModel.findOne({
+      user_id: userId,
+      following_user_id: profileUserId
+    });
+
+    return follower ? follower.toJSON() : follower;
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed to return document from followers collection"
       );
   }
 };
@@ -429,6 +557,34 @@ export const clearUsers = async () => {
       .child({ error: err })
       .error(
         "Test helper function failed delete all mock data form users collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearFollowers = async () => {
+  try {
+    await followerModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete all mock data form followers collection"
+      );
+
+    throw err;
+  }
+};
+
+export const clearBlockedUsers = async () => {
+  try {
+    await blockedUserModel.deleteMany({});
+  } catch (err) {
+    logger
+      .child({ error: err })
+      .error(
+        "Test helper function failed delete all mock data form blocked_users collection"
       );
 
     throw err;
