@@ -46,7 +46,7 @@
     "date-fns": "1.30.1",
     "dotenv": "8.0.0",
     "express": "4.16.3",
-    "handlebars": "4.1.2",
+    "handlebars": "4.5.3",
     "helmet": "3.12.1",
     "is-absolute-url": "2.1.0",
     "is-image": "2.0.0",
